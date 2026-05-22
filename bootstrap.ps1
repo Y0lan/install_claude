@@ -23,12 +23,36 @@ param(
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
+function Reset-ConsoleColumn {
+  try {
+    if (-not [Console]::IsOutputRedirected) {
+      [Console]::SetCursorPosition(0, [Console]::CursorTop)
+    }
+  } catch {
+    # Some hosts do not expose a writable console cursor; cosmetic only.
+  }
+}
+
 function Log($msg, $color = "Cyan") {
+  Reset-ConsoleColumn
   Write-Host ""
+  Reset-ConsoleColumn
   Write-Host "==> $msg" -ForegroundColor $color
 }
-function Warn($msg) { Write-Host "    ! $msg" -ForegroundColor Yellow }
-function Die ($msg) { Write-Host "    X $msg" -ForegroundColor Red; exit 1 }
+function Warn($msg) { Reset-ConsoleColumn; Write-Host "    ! $msg" -ForegroundColor Yellow }
+function Die ($msg) { Reset-ConsoleColumn; Write-Host "    X $msg" -ForegroundColor Red; exit 1 }
+
+function Write-NativeOutputLine {
+  param([object]$Value)
+  $text = if ($null -eq $Value) { "" } else { $Value.ToString() }
+  $text = $text -replace "`r", "`n"
+  foreach ($line in ($text -split "`n")) {
+    $clean = $line.TrimEnd()
+    if ([string]::IsNullOrWhiteSpace($clean)) { continue }
+    Reset-ConsoleColumn
+    Write-Host "    $clean"
+  }
+}
 
 # Strip CR bytes so any here-string we hand to bash inside WSL has pure LF endings.
 # Git on Windows defaults to core.autocrlf=true, which CRLF-ifies any text file
@@ -84,13 +108,44 @@ function Invoke-NativeStreamed {
     # string and printing it later makes PowerShell wrap line breaks badly.
     $ErrorActionPreference = "Continue"
     & $Block 2>&1 | ForEach-Object {
-      Write-Host ($_.ToString())
+      Write-NativeOutputLine $_
     }
     $rc = $LASTEXITCODE
   } finally {
     $ErrorActionPreference = $oldEap
   }
   return [pscustomobject]@{ ExitCode = $rc }
+}
+
+function Test-FiraCodeNerdFontInstalled {
+  $fontKeys = @(
+    'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Fonts',
+    'HKCU:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Fonts'
+  )
+  foreach ($key in $fontKeys) {
+    if (-not (Test-Path $key)) { continue }
+    $props = (Get-ItemProperty $key).PSObject.Properties
+    foreach ($p in $props) {
+      $candidate = "$($p.Name) $($p.Value)"
+      if ($candidate -match 'Fira\s*Code.*Nerd.*Mono' -or $candidate -match 'FiraCode.*Nerd.*Mono') {
+        return $true
+      }
+    }
+  }
+
+  $fontDirs = @(
+    "$env:WINDIR\Fonts",
+    "$env:LOCALAPPDATA\Microsoft\Windows\Fonts"
+  )
+  foreach ($dir in $fontDirs) {
+    if (-not (Test-Path $dir)) { continue }
+    $matches = @(Get-ChildItem $dir -File -ErrorAction SilentlyContinue | Where-Object {
+      $_.Name -match 'Fira\s*Code.*Nerd.*Mono' -or $_.Name -match 'FiraCode.*Nerd.*Mono'
+    })
+    if ($matches.Count -gt 0) { return $true }
+  }
+
+  return $false
 }
 
 # ---------- 0. Validate args (Linux username regex; refuses injection chars) ----------
@@ -355,8 +410,7 @@ if ($installRc -gt 0) {
 # ---------- 9. FiraCode Nerd Font (ligatures!) ----------
 Log "Checking FiraCode Nerd Font (ligatures included)"
 try {
-  $existingNerdMono = @(Get-ChildItem "$env:WINDIR\Fonts" -Filter "FiraCode*Nerd*Mono*.ttf" -File -ErrorAction SilentlyContinue)
-  if ($existingNerdMono.Count -gt 0) {
+  if (Test-FiraCodeNerdFontInstalled) {
     Write-Host "    FiraCode Nerd Font Mono already installed; skipping download"
   } else {
     $fontDir = Join-Path $env:TEMP "FiraCodeNF"
