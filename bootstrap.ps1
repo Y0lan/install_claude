@@ -1,6 +1,6 @@
-#Requires -RunAsAdministrator
+﻿#Requires -RunAsAdministrator
 # ============================================================================
-# WSL2 Ubuntu 22.04 dev box — Windows-side bootstrap
+# WSL2 Ubuntu 22.04 dev box - Windows-side bootstrap
 # Run ONCE in an Administrator PowerShell window:
 #
 #   Set-ExecutionPolicy -Scope Process Bypass -Force; .\bootstrap.ps1
@@ -15,7 +15,7 @@ param(
   [string]$Distro   = "Ubuntu-22.04",
   [string]$Username = ($env:USERNAME.ToLower() -replace '[^a-z0-9_-]', ''),
   # If set, existing Ubuntu* distros are wiped WITHOUT the interactive
-  # "WIPE" confirmation. DANGEROUS — only use this for automation/CI when
+  # "WIPE" confirmation. DANGEROUS - only use this for automation/CI when
   # you've already confirmed the box has no data you care about.
   [switch]$CleanInstall
 )
@@ -31,7 +31,7 @@ function Warn($msg) { Write-Host "    ! $msg" -ForegroundColor Yellow }
 function Die ($msg) { Write-Host "    X $msg" -ForegroundColor Red; exit 1 }
 
 # Native-exe call helper. $ErrorActionPreference="Stop" does NOT trap non-zero
-# exits from native binaries (wsl.exe, dism.exe, etc.) — only from PowerShell
+# exits from native binaries (wsl.exe, dism.exe, etc.) - only from PowerShell
 # cmdlets. We have to check $LASTEXITCODE ourselves every time.
 function Invoke-Native {
   param([string]$Label, [scriptblock]$Block, [int[]]$AllowedExitCodes = @(0))
@@ -69,7 +69,7 @@ if ($f2.State -ne "Enabled") {
 }
 if ($justEnabled) {
   Write-Host ""
-  Write-Host "  WSL features were just enabled — REBOOT REQUIRED before WSL can work." -ForegroundColor Yellow
+  Write-Host "  WSL features were just enabled - REBOOT REQUIRED before WSL can work." -ForegroundColor Yellow
   Write-Host "  Reboot Windows, then re-run this script. Everything done so far is idempotent." -ForegroundColor Yellow
   Write-Host ""
   exit 0
@@ -102,7 +102,7 @@ if ($existingUbuntu.Count -gt 0) {
   Write-Host "    user/sudoers/wsl.conf re-applied idempotently). Other distros are left alone." -ForegroundColor Cyan
   Write-Host ""
   Write-Host "Option B: WIPE all listed distros and start clean." -ForegroundColor Red
-  Write-Host "    PERMANENTLY DELETES the VHD for each distro above — every file, every home" -ForegroundColor Red
+  Write-Host "    PERMANENTLY DELETES the VHD for each distro above - every file, every home" -ForegroundColor Red
   Write-Host "    directory, every config. No recycle bin. Irreversible." -ForegroundColor Red
   Write-Host ""
 
@@ -146,7 +146,7 @@ while ((Get-InstalledDistros) -notcontains $Distro) {
   if (++$tries -gt 60) { Die "$Distro did not register within 2 minutes." }
 }
 
-# ---------- 4. First-launch init — fresh WSL distros need OOBE before root provisioning works ----------
+# ---------- 4. First-launch init - fresh WSL distros need OOBE before root provisioning works ----------
 Log "Ensuring $Distro is initialized (this may take ~10s the first time)"
 $initTries = 0
 while ($true) {
@@ -192,7 +192,7 @@ wsl --set-default $Distro
 # Terminate so wsl.conf takes effect on next launch
 wsl --terminate $Distro 2>$null | Out-Null
 
-# ---------- 7. Copy install.sh into Ubuntu (stream via stdin — no argv-size limit, no quoting traps) ----------
+# ---------- 7. Copy install.sh into Ubuntu (stream via stdin - no argv-size limit, no quoting traps) ----------
 $installSh = Join-Path $PSScriptRoot "install.sh"
 if (-not (Test-Path $installSh)) {
   Die "install.sh not found beside bootstrap.ps1. Both files must be in the same folder."
@@ -205,7 +205,7 @@ $b64 | & wsl -d $Distro -u $Username --cd "~" -- bash -c 'set -e; base64 -d > ~/
 if ($LASTEXITCODE -ne 0) { Die "Failed to copy install.sh into WSL (wsl/base64 exit $LASTEXITCODE)" }
 
 # ---------- 8. Run install.sh inside Ubuntu as the user ----------
-Log "Running install.sh inside $Distro (packages, zsh, Claude, skills — takes several minutes)"
+Log "Running install.sh inside $Distro (packages, zsh, Claude, skills - takes several minutes)"
 wsl -d $Distro -u $Username --cd "~" -- bash -lc "./install.sh"
 $installRc = $LASTEXITCODE
 # install.sh exit convention: 0=ok, 1-99=N skill failures (warn, continue),
@@ -264,7 +264,7 @@ if (Test-Path $wtSettings) {
     if (-not $json.profiles.PSObject.Properties['defaults']) {
       $json.profiles | Add-Member -NotePropertyName defaults -NotePropertyValue ([pscustomobject]@{}) -Force
     }
-    # "FiraCode Nerd Font Mono" — single-cell glyphs, the variant terminals want.
+    # "FiraCode Nerd Font Mono" - single-cell glyphs, the variant terminals want.
     # The plain "FiraCode Nerd Font" family renders icons 2 cells wide and can
     # nudge column alignment in Powerline-style prompts.
     $font = [pscustomobject]@{ face = "FiraCode Nerd Font Mono"; size = 11 }
@@ -279,7 +279,7 @@ if (Test-Path $wtSettings) {
         $ubuntu | Add-Member -NotePropertyName startingDirectory -NotePropertyValue "\\wsl$\$Distro\home\$Username"          -Force
         if ($ubuntu.PSObject.Properties['guid']) { $json.defaultProfile = $ubuntu.guid }
       } else {
-        Warn "No '$Distro' profile found in Windows Terminal — open WT once to let it auto-detect."
+        Warn "No '$Distro' profile found in Windows Terminal - open WT once to let it auto-detect."
       }
     } else {
       Warn "Windows Terminal has no profile list yet. Font default applied; profile-detection skipped."
@@ -297,7 +297,7 @@ if (Test-Path $wtSettings) {
     Write-Host "      4. Starting directory: \\wsl`$\$Distro\home\$Username" -ForegroundColor Yellow
   }
 } else {
-  Warn "Windows Terminal not installed — skipping settings patch."
+  Warn "Windows Terminal not installed - skipping settings patch."
   Warn "Install it from the Microsoft Store for the best experience (font ligatures, tabs)."
 }
 
@@ -320,8 +320,8 @@ $sc.IconLocation     = "wsl.exe,0"
 $sc.Description      = "Open $Distro in zsh, in home dir"
 $sc.Save()
 
-# ---------- 12. Launch first session → lands in claude OAuth ----------
-Log "Opening a fresh terminal — zsh will launch Claude Code for OAuth automatically" "Green"
+# ---------- 12. Launch first session -> lands in claude OAuth ----------
+Log "Opening a fresh terminal - zsh will launch Claude Code for OAuth automatically" "Green"
 Start-Sleep -Seconds 1
 if ($wt) {
   Start-Process $wt.Source -ArgumentList @("new-tab","wsl.exe","-d",$Distro,"--cd","~","--","zsh","-l")
@@ -335,7 +335,7 @@ Write-Host "  Desktop shortcut: $shortcut" -ForegroundColor Green
 Write-Host "  Linux user:       $Username  (passwordless sudo, empty password)" -ForegroundColor Green
 Write-Host "  Default distro:   $Distro" -ForegroundColor Green
 if (-not $wtPatched -and (Test-Path $wtSettings)) {
-  Write-Host "  WT settings:      NOT patched — see manual steps printed above." -ForegroundColor Yellow
+  Write-Host "  WT settings:      NOT patched - see manual steps printed above." -ForegroundColor Yellow
 }
 Write-Host ""
 Write-Host "  If Claude Code doesn't auto-launch, open the shortcut and run: claude" -ForegroundColor Yellow

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ============================================================================
-# WSL Ubuntu 22.04 — Linux-side bootstrap
+# WSL Ubuntu 22.04 - Linux-side bootstrap
 # Run as your normal (non-root) Linux user. Invoked automatically by
 # bootstrap.ps1, or run manually with:
 #   bash ~/install.sh                # default: clone + run upstream setup
@@ -29,17 +29,17 @@ if [ "$EUID" -eq 0 ]; then
   exit 1
 fi
 if ! have sudo; then
-  echo "sudo not found — is this Ubuntu?" >&2; exit 1
+  echo "sudo not found - is this Ubuntu?" >&2; exit 1
 fi
 
 USER_NAME="$(whoami)"
-log "User: $USER_NAME — home: $HOME — skip-skill-setup: $SKIP_SKILL_SETUP"
+log "User: $USER_NAME - home: $HOME - skip-skill-setup: $SKIP_SKILL_SETUP"
 log "Expect 10-30 min total (apt updates, npm globals, gstack runs playwright install ~300MB)."
-log "A few steps will pause for input — that's intentional:"
+log "A few steps will pause for input - that's intentional:"
 log "  - gstack/setup asks about skill name prefix (10s timeout, default is fine)"
 log "  - npx claude-mem install asks for IDE + LLM provider (Claude Code + claude is the usual answer)"
 log "  - claude OAuth at the very end (browser-based, no typing)"
-log "Answer at your own pace — nothing is on a hard deadline."
+log "Answer at your own pace - nothing is on a hard deadline."
 
 # Accumulator for skill-clone failures (reported at end, doesn't abort the script)
 declare -a SKILL_FAILURES=()
@@ -72,7 +72,7 @@ sudo DEBIAN_FRONTEND=noninteractive apt-get install -y "${APT_OPTS[@]}" \
   libxkbcommon0 libxcomposite1 libxdamage1 libxfixes3 libxrandr2 \
   libgbm1 libpango-1.0-0 libcairo2 libasound2
 
-# fd-find ships as `fdfind` on Ubuntu — symlink to fd
+# fd-find ships as `fdfind` on Ubuntu - symlink to fd
 mkdir -p "$HOME/.local/bin"
 if have fdfind && ! have fd; then
   ln -sf "$(command -v fdfind)" "$HOME/.local/bin/fd"
@@ -83,7 +83,7 @@ fi
 # Make sure ~/.local/bin is in PATH for the rest of this script
 export PATH="$HOME/.local/bin:$PATH"
 
-# ---------- 3. Google Chrome .deb (real .deb — snap chromium is broken in WSL) ----------
+# ---------- 3. Google Chrome .deb (real .deb - snap chromium is broken in WSL) ----------
 log "Installing Google Chrome (real .deb; snap chromium doesn't work in WSL)"
 if ! have google-chrome; then
   TMPDEB="$(mktemp --suffix=.deb)"
@@ -143,7 +143,7 @@ if [ -f "$HOME/.zshrc" ] && [ "${#existing_backups[@]}" -eq 0 ]; then
   cp "$HOME/.zshrc" "$HOME/.zshrc.pre-bootstrap.$(date +%s)"
 fi
 
-# Sentinel-file checks instead of directory checks — catches half-installed
+# Sentinel-file checks instead of directory checks - catches half-installed
 # state from killed/aborted previous runs.
 if [ ! -f "$HOME/.oh-my-zsh/oh-my-zsh.sh" ]; then
   [ -d "$HOME/.oh-my-zsh" ] && rm -rf "$HOME/.oh-my-zsh"
@@ -165,7 +165,7 @@ clone_if_needed https://github.com/zsh-users/zsh-autosuggestions       "$ZSH_CUS
 clone_if_needed https://github.com/zsh-users/zsh-syntax-highlighting   "$ZSH_CUSTOM/plugins/zsh-syntax-highlighting"   "zsh-syntax-highlighting.zsh"
 clone_if_needed https://github.com/sindresorhus/pure.git                "$HOME/.zsh/pure"                                "pure.zsh"
 
-# ---------- 7. .zshrc (managed-block — user edits outside markers are preserved) ----------
+# ---------- 7. .zshrc (managed-block - user edits outside markers are preserved) ----------
 log "Writing managed block in ~/.zshrc"
 ZSHRC="$HOME/.zshrc"
 START_MARKER='# >>> claude-bootstrap >>>'
@@ -173,7 +173,7 @@ END_MARKER='# <<< claude-bootstrap <<<'
 
 MANAGED_TMP="$(mktemp)"
 cat > "$MANAGED_TMP" <<'BLOCK'
-# (auto-managed by ~/install.sh — content between the markers is overwritten on rerun)
+# (auto-managed by ~/install.sh - content between the markers is overwritten on rerun)
 # Anything OUTSIDE the markers is preserved.
 
 # ===== PATH =====
@@ -230,7 +230,7 @@ if [[ -f "$HOME/.claude-firstrun" && -z ${CLAUDE_FIRSTRUN_DONE-} ]]; then
   export CLAUDE_FIRSTRUN_DONE=1
   if command -v claude >/dev/null 2>&1; then
     echo ""
-    echo "First launch — opening Claude Code for OAuth login..."
+    echo "First launch - opening Claude Code for OAuth login..."
     echo "(Close this terminal mid-OAuth and the next zsh will retry.)"
     echo ""
     claude
@@ -249,18 +249,18 @@ if [[ -f "$HOME/.claude-firstrun" && -z ${CLAUDE_FIRSTRUN_DONE-} ]]; then
     if [ "$_claude_rc" = 0 ] && [ "$_authed" = 1 ]; then
       rm -f "$HOME/.claude-firstrun"
     else
-      echo "(first-run marker kept — OAuth doesn't look complete yet; will retry next zsh)"
+      echo "(first-run marker kept - OAuth doesn't look complete yet; will retry next zsh)"
     fi
     unset _claude_rc _authed _p
   fi
 fi
 BLOCK
 
-# Marker-pair sanity check. If both markers exist (in order) → in-place splice.
-# If only one marker exists → file is corrupted; back it up and write a fresh
+# Marker-pair sanity check. If both markers exist (in order) -> in-place splice.
+# If only one marker exists -> file is corrupted; back it up and write a fresh
 # one (don't risk eating everything after a lone start marker).
 # Use awk for counting: grep -c prints '0' AND exits non-zero on no match,
-# so `grep -c ... || echo 0` produced "0\n0" — failing later integer compares.
+# so `grep -c ... || echo 0` produced "0\n0" - failing later integer compares.
 if [ -f "$ZSHRC" ]; then
   has_start=$(awk -v m="$START_MARKER" '$0==m{c++} END{print c+0}' "$ZSHRC")
   has_end=$(awk   -v m="$END_MARKER"   '$0==m{c++} END{print c+0}' "$ZSHRC")
@@ -290,7 +290,7 @@ elif [ "$has_start" -ge 1 ] || [ "$has_end" -ge 1 ]; then
   cp "$ZSHRC" "$ZSHRC.corrupted.$(date +%s)"
   { echo "$START_MARKER"; cat "$MANAGED_TMP"; echo "$END_MARKER"; } > "$ZSHRC"
 else
-  # No markers — append fresh block, preserve any existing content
+  # No markers - append fresh block, preserve any existing content
   {
     if [ -f "$ZSHRC" ]; then cat "$ZSHRC"; echo ""; fi
     echo "$START_MARKER"
@@ -311,13 +311,13 @@ if ! have claude; then
 fi
 
 # ---------- 9. claude-mem (proper plugin install, not just the npm package) ----------
-# Upstream docs explicitly say: DO NOT 'npm install -g claude-mem' — that only
+# Upstream docs explicitly say: DO NOT 'npm install -g claude-mem' - that only
 # drops the SDK without registering the Claude Code hooks or starting the worker.
 # `npx claude-mem install` is the canonical installer; it's interactive and asks
 # for IDE + LLM provider. Defaults: ide=claude-code, provider=claude.
-log "Installing claude-mem (will ask for IDE + provider — pick 'claude-code' and 'claude' if unsure)"
+log "Installing claude-mem (will ask for IDE + provider - pick 'claude-code' and 'claude' if unsure)"
 if [ ! -d "$HOME/.claude/plugins/marketplaces/thedotmack" ] && [ ! -f "$HOME/.claude-mem/settings.json" ]; then
-  npx --yes claude-mem@latest install || log "WARN: claude-mem install exited non-zero — run 'npx claude-mem install' manually"
+  npx --yes claude-mem@latest install || log "WARN: claude-mem install exited non-zero - run 'npx claude-mem install' manually"
 else
   log "claude-mem already installed (settings dir present); skipping"
 fi
@@ -338,7 +338,7 @@ install_skill() {
     return 0
   fi
   if [ -d "$dest" ] && [ -n "$(ls -A "$dest" 2>/dev/null)" ]; then
-    log "  $name: WARN — $dest exists and is not a git repo. Skipping. Remove it manually to re-clone."
+    log "  $name: WARN - $dest exists and is not a git repo. Skipping. Remove it manually to re-clone."
     SKILL_FAILURES+=("$name (existing non-git dir at $dest)")
     return 0
   fi
@@ -354,7 +354,7 @@ install_skill() {
       # SECURITY: this executes code from the cloned repo. You opted in by
       # listing the URL above. Run with --no-skill-setup to disable.
       if [ -x "$dest/setup" ]; then
-        log "  $name: running ./setup (interactive — answer prompts or wait for timeout)"
+        log "  $name: running ./setup (interactive - answer prompts or wait for timeout)"
         if ! ( cd "$dest" && ./setup ); then
           log "  $name: WARN setup exited non-zero"
           SKILL_FAILURES+=("$name (setup script failed)")
@@ -368,12 +368,12 @@ install_skill() {
       fi
     fi
   else
-    log "  $name: WARN — clone failed from $url"
+    log "  $name: WARN - clone failed from $url"
     SKILL_FAILURES+=("$name <- $url (clone failed)")
   fi
 }
 
-# Canonical repos (verified May 2026 — change if upstream moves):
+# Canonical repos (verified May 2026 - change if upstream moves):
 GSTACK_REPO="https://github.com/garrytan/gstack.git"
 KARPATHY_REPO="https://github.com/forrestchang/andrej-karpathy-skills.git"
 SUPERPOWERS_REPO="https://github.com/obra/superpowers.git"
@@ -389,7 +389,7 @@ install_skill "matt-pocock-skills"      "$MATT_POCOCK_REPO"
 
 # ---------- 11. First-run marker (so .zshrc auto-launches claude on first interactive zsh) ----------
 # Only create if claude is actually installed AND user isn't already logged in.
-# Detection is heuristic — we check known credential paths. Proper file-vs-dir
+# Detection is heuristic - we check known credential paths. Proper file-vs-dir
 # predicates: `-s` is only valid on files (returns true on non-empty dirs on
 # some filesystems); `ls -A` only makes sense on dirs.
 CLAUDE_CRED_PATHS=("$HOME/.config/claude" "$HOME/.claude/credentials" "$HOME/.claude/.credentials.json")
@@ -405,7 +405,7 @@ if [ "$already_authed" = "0" ]; then
   touch "$HOME/.claude-firstrun"
 fi
 
-# ---------- 12. Done — summary ----------
+# ---------- 12. Done - summary ----------
 log "===== install.sh complete ====="
 echo ""
 echo "  Shell:      zsh + Pure prompt"
@@ -431,8 +431,8 @@ echo ""
 
 # Exit-code convention (so bootstrap.ps1 can distinguish):
 #   0          = everything OK
-#   1..99      = N skill failures (partial — user can re-run to retry)
-#   100+       = fatal (npm missing, claude install failed, etc.) — already exited above
+#   1..99      = N skill failures (partial - user can re-run to retry)
+#   100+       = fatal (npm missing, claude install failed, etc.) - already exited above
 n="${#SKILL_FAILURES[@]}"
 [ "$n" -gt 99 ] && n=99
 exit "$n"
