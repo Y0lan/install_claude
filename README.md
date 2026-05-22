@@ -12,7 +12,7 @@ Le setup repart volontairement sur un **Ubuntu 22.04 propre**. Les autres Ubuntu
 - un raccourci Bureau `Ubuntu-22.04 (zsh).lnk`
 - un raccourci Bureau `Claude Code (auto).lnk`
 - un terminal WSL propre, en `zsh`, ouvert dans `~`
-- Claude Code qui se lance pour la connexion OAuth
+- Claude Code prêt à connecter manuellement, sans ouverture automatique du navigateur WSL
 - Claude Code, Codex et les skills prêts à l’emploi
 
 ## 1. Ouvrir PowerShell en administrateur
@@ -72,14 +72,18 @@ Vous pouvez voir quelques prompts :
 
 - `gstack` : appuyez sur Entrée, le choix par défaut est OK.
 - `claude-mem` : choisissez `Claude Code` et `Codex` pour le harness, puis `Claude Code` pour le provider.
-- OAuth Claude : connectez-vous dans le navigateur quand Claude s’ouvre.
+
+Le script ne lance plus automatiquement le login Claude, parce que l’ouverture d’un navigateur Linux/WSLg depuis WSL peut freezer certains PC Windows.
 
 ## 6. Utiliser l’environnement
 
 Après l’installation :
 
-- ouvrez `Claude Code (auto).lnk` pour lancer Claude en mode auto
 - ouvrez `Ubuntu-22.04 (zsh).lnk` pour un terminal WSL normal
+- lancez `claude-login`
+- ouvrez l’URL affichée dans votre navigateur Windows
+- si Claude affiche un prompt de login, appuyez sur `c` pour copier l’URL, puis ouvrez-la dans le navigateur Windows
+- après connexion, ouvrez `Claude Code (auto).lnk` pour lancer Claude en mode auto
 - si Claude était déjà ouvert, fermez-le puis rouvrez-le pour voir les nouveaux skills
 
 Dans Claude, vérifiez les skills avec :
@@ -146,6 +150,7 @@ Les alias principaux dans zsh :
 ```bash
 c       # codex
 cx      # efface l’écran puis lance claude --permission-mode bypassPermissions
+claude-login # login Claude sans ouvrir automatiquement Chrome Linux/WSLg
 t       # tmux attach || tmux new -s Work
 ic      # layout tmux avec codex
 ix      # layout tmux avec cx

@@ -117,6 +117,33 @@ fi
 # Make sure ~/.local/bin is in PATH for the rest of this script
 export PATH="$HOME/.local/bin:$PATH"
 
+# Claude Code login can try to open a Linux/WSLg browser from WSL. On some
+# Windows machines that hard-freezes the desktop. Force browser launches to
+# print the URL instead; users open it in their normal Windows browser.
+cat > "$HOME/.local/bin/wsl-copy-url" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+url="${1:-}"
+if [ -z "$url" ]; then
+  echo "wsl-copy-url: missing URL" >&2
+  exit 2
+fi
+
+echo "" >&2
+echo "Open this URL in your Windows browser:" >&2
+echo "$url" >&2
+echo "" >&2
+
+if [ -r /proc/sys/fs/binfmt_misc/WSLInterop ] && command -v clip.exe >/dev/null 2>&1; then
+  if printf '%s' "$url" | timeout 2s clip.exe >/dev/null 2>&1; then
+    echo "The URL was also copied to the Windows clipboard." >&2
+  fi
+fi
+exit 0
+EOF
+chmod +x "$HOME/.local/bin/wsl-copy-url"
+export BROWSER="$HOME/.local/bin/wsl-copy-url"
+
 install_eza_if_needed() {
   if have eza; then
     log "eza already installed; skipping"
@@ -322,6 +349,11 @@ path=(
 )
 export PATH
 
+# ===== browser / OAuth safety =====
+# Do not let CLI tools open Linux Chrome/WSLg automatically from WSL.
+# Claude login should print/copy the URL; open it manually in Windows.
+export BROWSER="$HOME/.local/bin/wsl-copy-url"
+
 # ===== oh-my-zsh =====
 export ZSH="$HOME/.oh-my-zsh"
 ZSH_THEME=""   # Pure handles the prompt
@@ -388,6 +420,7 @@ alias t='tmux attach || tmux new -s Work'
 alias ic='tdl c'
 alias ix='tdl cx'
 alias icx='tdl c cx'
+alias claude-login='BROWSER="$HOME/.local/bin/wsl-copy-url" claude auth login'
 
 # ===== git =====
 alias g='git'
@@ -459,38 +492,6 @@ tdl() {
 
 # ===== always start in $HOME on interactive login =====
 [[ $- == *i* && -z ${WSL_STARTUP_DONE-} ]] && { export WSL_STARTUP_DONE=1; cd "$HOME"; }
-
-# ===== first-run hook: launch claude OAuth =====
-# Marker removed ONLY if claude exits cleanly AND we can see actual credentials
-# on disk afterward (otherwise the user quit before completing OAuth).
-if [[ -f "$HOME/.claude-firstrun" && -z ${CLAUDE_FIRSTRUN_DONE-} ]]; then
-  export CLAUDE_FIRSTRUN_DONE=1
-  if command -v claude >/dev/null 2>&1; then
-    echo ""
-    echo "First launch - opening Claude Code for OAuth login..."
-    echo "(Close this terminal mid-OAuth and the next zsh will retry.)"
-    echo ""
-    claude
-    _claude_rc=$?
-    # Proper file-vs-directory predicates. `-s` returns true on non-empty dirs
-    # on Linux (ext4 reports dir size > 0), so it can't be applied to dirs.
-    # ls -A on a regular file also yields garbage. Split the two cases.
-    _authed=0
-    for _p in "$HOME/.config/claude" "$HOME/.claude/credentials" "$HOME/.claude/.credentials.json"; do
-      if [ -d "$_p" ]; then
-        if [ -n "$(ls -A "$_p" 2>/dev/null)" ]; then _authed=1; break; fi
-      elif [ -f "$_p" ]; then
-        if [ -s "$_p" ]; then _authed=1; break; fi
-      fi
-    done
-    if [ "$_claude_rc" = 0 ] && [ "$_authed" = 1 ]; then
-      rm -f "$HOME/.claude-firstrun"
-    else
-      echo "(first-run marker kept - OAuth doesn't look complete yet; will retry next zsh)"
-    fi
-    unset _claude_rc _authed _p
-  fi
-fi
 BLOCK
 
 # Marker-pair sanity check. If both markers exist (in order) -> in-place splice.
@@ -771,23 +772,10 @@ install_skill_bundle "matt-pocock-skills"     "$MATT_POCOCK_REPO"  "mattpocock/s
 # Alternative install path for superpowers (via Claude Code marketplace, after OAuth):
 #   /plugin install superpowers@claude-plugins-official
 
-# ---------- 12. First-run marker (so .zshrc auto-launches claude on first interactive zsh) ----------
-# Only create if claude is actually installed AND user isn't already logged in.
-# Detection is heuristic - we check known credential paths. Proper file-vs-dir
-# predicates: `-s` is only valid on files (returns true on non-empty dirs on
-# some filesystems); `ls -A` only makes sense on dirs.
-CLAUDE_CRED_PATHS=("$HOME/.config/claude" "$HOME/.claude/credentials" "$HOME/.claude/.credentials.json")
-already_authed=0
-for p in "${CLAUDE_CRED_PATHS[@]}"; do
-  if [ -d "$p" ]; then
-    [ -n "$(ls -A "$p" 2>/dev/null)" ] && { already_authed=1; break; }
-  elif [ -f "$p" ]; then
-    [ -s "$p" ] && { already_authed=1; break; }
-  fi
-done
-if [ "$already_authed" = "0" ]; then
-  touch "$HOME/.claude-firstrun"
-fi
+# ---------- 12. Claude login is manual ----------
+# Do not auto-launch Claude here. Browser auto-open from WSL can start Linux
+# Chrome/WSLg and freeze some Windows desktops. Users run `claude-login` later.
+rm -f "$HOME/.claude-firstrun"
 
 # ---------- 13. Done - summary ----------
 log "===== install.sh complete ====="
@@ -816,8 +804,8 @@ if [ "${#SKILL_FAILURES[@]}" -gt 0 ]; then
   echo ""
 fi
 
-echo "  Next: close this shell, open 'Ubuntu-22.04 (zsh)' desktop shortcut."
-echo "        zsh will start in ~ and launch \`claude\` for OAuth automatically."
+echo "  Next: open 'Ubuntu-22.04 (zsh)' and run: claude-login"
+echo "        Open the printed/copied URL in your Windows browser."
 echo ""
 
 # Exit-code convention (so bootstrap.ps1 can distinguish):

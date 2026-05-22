@@ -408,9 +408,9 @@ Log "Running install.sh inside $Distro (packages, zsh, Claude, skills - takes se
 Invoke-NativePassthrough { wsl -d $Distro -u $Username --cd $linuxHome -- bash -lc "bash ~/install.sh" }
 $installRc = Last-NativeExitCode
 # install.sh exit convention: 0=ok, 1-99=N skill failures (warn, continue),
-# 100+=fatal (die, abort the rest of bootstrap including the Claude auto-launch).
+# 100+=fatal (die, abort the rest of bootstrap before shortcuts/final launch).
 if ($installRc -ge 100) {
-  Die "install.sh reported a FATAL error (exit $installRc). See output above. Aborting before launching Claude."
+  Die "install.sh reported a FATAL error (exit $installRc). See output above. Aborting before creating shortcuts."
 }
 if ($installRc -gt 0) {
   Warn "install.sh reported $installRc skill failure(s). Bootstrap will continue, but re-run install.sh inside WSL to retry."
@@ -572,8 +572,8 @@ $claudeSc.IconLocation     = "wsl.exe,0"
 $claudeSc.Description      = "Open Claude Code in $Distro with bypass permissions"
 $claudeSc.Save()
 
-# ---------- 12. Launch first session -> lands in claude OAuth ----------
-Log "Opening a fresh terminal - zsh will launch Claude Code for OAuth automatically" "Green"
+# ---------- 12. Launch first session ----------
+Log "Opening a fresh terminal - run 'claude-login' there when you are ready" "Green"
 Start-Sleep -Seconds 1
 if ($wt) {
   Start-Process $wt.Source -ArgumentList @("new-tab","wsl.exe","-d",$Distro,"--cd",$linuxHome,"--","zsh","-l")
@@ -591,6 +591,7 @@ if (-not $wtPatched -and $wtSettings -and (Test-Path $wtSettings)) {
   Write-Host "  WT settings:      NOT patched - see manual steps printed above." -ForegroundColor Yellow
 }
 Write-Host ""
-Write-Host "  If Claude Code doesn't auto-launch, open the shortcut and run: claude" -ForegroundColor Yellow
-Write-Host "  To launch Claude in bypass mode later, open: $claudeShortcut" -ForegroundColor Yellow
+Write-Host "  Claude login:     open Ubuntu shortcut and run: claude-login" -ForegroundColor Yellow
+Write-Host "  Browser safety:   open the printed/copied URL in Windows; WSL will not auto-open Chrome." -ForegroundColor Yellow
+Write-Host "  Bypass mode:      after login, open: $claudeShortcut" -ForegroundColor Yellow
 Write-Host ""
