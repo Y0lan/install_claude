@@ -45,12 +45,35 @@ function ConvertTo-LfText {
 # cmdlets. We have to check $LASTEXITCODE ourselves every time.
 function Invoke-Native {
   param([string]$Label, [scriptblock]$Block, [int[]]$AllowedExitCodes = @(0))
-  & $Block
-  $rc = $LASTEXITCODE
+  $oldEap = $ErrorActionPreference
+  try {
+    # Windows PowerShell turns native stderr (wsl.exe, dism.exe, etc.) into
+    # NativeCommandError records. With ErrorActionPreference=Stop, harmless WSL
+    # warnings can otherwise abort before we inspect $LASTEXITCODE.
+    $ErrorActionPreference = "Continue"
+    & $Block
+    $rc = $LASTEXITCODE
+  } finally {
+    $ErrorActionPreference = $oldEap
+  }
   if ($AllowedExitCodes -notcontains $rc) {
     Die "$Label failed (exit $rc). Stopping bootstrap; rerun after fixing."
   }
   return $rc
+}
+
+function Invoke-NativeCaptured {
+  param([scriptblock]$Block)
+  $oldEap = $ErrorActionPreference
+  try {
+    $ErrorActionPreference = "Continue"
+    $output = & $Block 2>&1
+    $rc = $LASTEXITCODE
+  } finally {
+    $ErrorActionPreference = $oldEap
+  }
+  $text = (($output | ForEach-Object { $_.ToString() }) -join "`n")
+  return [pscustomobject]@{ ExitCode = $rc; Output = $text }
 }
 
 # ---------- 0. Validate args (Linux username regex; refuses injection chars) ----------
@@ -74,8 +97,8 @@ function Test-WslWorks {
   $cmd = Get-Command wsl.exe -ErrorAction SilentlyContinue
   if (-not $cmd) { return $false }
   # --status is non-interactive, fast, exits 0 only when WSL is functional.
-  $null = & $cmd.Source --status 2>&1
-  return ($LASTEXITCODE -eq 0)
+  $result = Invoke-NativeCaptured { & $cmd.Source --status }
+  return ($result.ExitCode -eq 0)
 }
 
 if (Test-WslWorks) {
@@ -120,19 +143,21 @@ if (Test-WslWorks) {
 # ---------- 2. WSL update + default version ----------
 Log "Updating WSL kernel (best-effort)"
 try {
-  wsl --update --web-download 2>&1 | Out-Host
-  if ($LASTEXITCODE -ne 0) { Warn "wsl --update exited $LASTEXITCODE (often fine on locked-down corp machines)" }
+  $updateResult = Invoke-NativeCaptured { wsl --update --web-download }
+  if ($updateResult.Output) { Write-Host $updateResult.Output }
+  if ($updateResult.ExitCode -ne 0) { Warn "wsl --update exited $($updateResult.ExitCode) (often fine on locked-down corp machines)" }
 } catch {
   Warn "wsl --update failed (often fine on locked-down corp machines): $_"
 }
 Log "Setting WSL default version to 2"
-wsl --set-default-version 2 | Out-Null
-if ($LASTEXITCODE -ne 0) { Die "wsl --set-default-version 2 failed (exit $LASTEXITCODE). Check WSL install/update output above." }
+$setVersion = Invoke-NativeCaptured { wsl --set-default-version 2 }
+if ($setVersion.ExitCode -ne 0) { Die "wsl --set-default-version 2 failed (exit $($setVersion.ExitCode)). Check WSL install/update output above." }
 
 # ---------- 3. Install Ubuntu-22.04 (no auto-launch) ----------
 # Normalize `wsl -l -q` output: strips NULs (UTF-16 artifact) and CRs.
 function Get-InstalledDistros {
-  $raw = (wsl -l -q 2>$null | Out-String)
+  $result = Invoke-NativeCaptured { wsl -l -q }
+  $raw = $result.Output
   ($raw -replace "`0","" -split "`r?`n") | Where-Object { $_.Trim() } | ForEach-Object { $_.Trim() }
 }
 
@@ -155,9 +180,10 @@ if ($existingUbuntu.Count -gt 0) {
   if ($shouldWipe) {
     foreach ($d in $existingUbuntu) {
       Log "Unregistering $d (PERMANENT DELETE)" "Red"
-      wsl --terminate $d 2>$null | Out-Null
-      wsl --unregister $d
-      if ($LASTEXITCODE -ne 0) { Die "wsl --unregister $d failed (exit $LASTEXITCODE). Aborting before partial state can cause confusion." }
+      $null = Invoke-NativeCaptured { wsl --terminate $d }
+      $unregister = Invoke-NativeCaptured { wsl --unregister $d }
+      if ($unregister.Output) { Write-Host $unregister.Output }
+      if ($unregister.ExitCode -ne 0) { Die "wsl --unregister $d failed (exit $($unregister.ExitCode)). Aborting before partial state can cause confusion." }
     }
     Log "Wipe complete. Continuing with clean install of $Distro." "Green"
     # Re-query so subsequent checks see the fresh state.
@@ -173,8 +199,9 @@ if ($existingUbuntu.Count -gt 0) {
 
 if ((Get-InstalledDistros) -notcontains $Distro) {
   Log "Installing $Distro (no launch)"
-  wsl --install -d $Distro --no-launch 2>&1 | Out-Host
-  if ($LASTEXITCODE -ne 0) { Die "wsl --install -d $Distro failed (exit $LASTEXITCODE). Check the output above; common cause: distro name unsupported on this WSL build. Try 'wsl --list --online' to see valid names." }
+  $installResult = Invoke-NativeCaptured { wsl --install -d $Distro --no-launch }
+  if ($installResult.Output) { Write-Host $installResult.Output }
+  if ($installResult.ExitCode -ne 0) { Die "wsl --install -d $Distro failed (exit $($installResult.ExitCode)). Check the output above; common cause: distro name unsupported on this WSL build. Try 'wsl --list --online' to see valid names." }
 } else {
   Log "$Distro already installed (reusing existing)"
 }
@@ -190,8 +217,8 @@ while ((Get-InstalledDistros) -notcontains $Distro) {
 Log "Ensuring $Distro is initialized (this may take ~10s the first time)"
 $initTries = 0
 while ($true) {
-  $probe = wsl -d $Distro -u root -- bash -c "echo ok" 2>$null
-  if ($probe -match "ok") { break }
+  $probe = Invoke-NativeCaptured { wsl -d $Distro -u root -- bash -c "echo ok" }
+  if ($probe.ExitCode -eq 0 -and $probe.Output -match "ok") { break }
   if (++$initTries -gt 30) { Die "$Distro failed to initialize after 60s. Try: wsl --terminate $Distro ; wsl --unregister $Distro ; rerun." }
   Start-Sleep -Seconds 2
 }
@@ -222,8 +249,9 @@ appendWindowsPath=true
 WSLCONF
 "@
 $bashUser = ConvertTo-LfText $bashUser
-wsl -d $Distro -u root -- bash -c $bashUser
-if ($LASTEXITCODE -ne 0) { Die "User provisioning inside $Distro failed (wsl exit $LASTEXITCODE). See output above." }
+$provision = Invoke-NativeCaptured { wsl -d $Distro -u root -- bash -c $bashUser }
+if ($provision.Output) { Write-Host $provision.Output }
+if ($provision.ExitCode -ne 0) { Die "User provisioning inside $Distro failed (wsl exit $($provision.ExitCode)). See output above." }
 
 # Belt-and-suspenders: also try the legacy per-distro launcher exe (ubuntu2204.exe,
 # ubuntu.exe). These exist only on Microsoft-Store-distribution installs from the
@@ -241,11 +269,12 @@ if (-not $launcherSet) {
 
 # ---------- 6. Default WSL distro ----------
 Log "Setting $Distro as default WSL distro"
-wsl --set-default $Distro
-if ($LASTEXITCODE -ne 0) { Die "wsl --set-default $Distro failed (exit $LASTEXITCODE)." }
+$setDefault = Invoke-NativeCaptured { wsl --set-default $Distro }
+if ($setDefault.Output) { Write-Host $setDefault.Output }
+if ($setDefault.ExitCode -ne 0) { Die "wsl --set-default $Distro failed (exit $($setDefault.ExitCode))." }
 
 # Terminate so wsl.conf takes effect on next launch
-wsl --terminate $Distro 2>$null | Out-Null
+$null = Invoke-NativeCaptured { wsl --terminate $Distro }
 
 # ---------- 7. Copy install.sh into Ubuntu ----------
 $installSh = Join-Path $PSScriptRoot "install.sh"
@@ -256,12 +285,14 @@ Log "Copying install.sh into ~$Username/install.sh"
 # Avoid PowerShell-to-bash quoting and stdin entirely. Copy through the WSL
 # filesystem share as UTF-8/LF, then run it via `bash ~/install.sh` below so
 # executable bits do not matter.
-wsl -d $Distro -u $Username -- true
-if ($LASTEXITCODE -ne 0) { Die "Failed to start $Distro before copying install.sh (wsl exit $LASTEXITCODE)" }
+$startUser = Invoke-NativeCaptured { wsl -d $Distro -u $Username -- true }
+if ($startUser.Output) { Write-Host $startUser.Output }
+if ($startUser.ExitCode -ne 0) { Die "Failed to start $Distro before copying install.sh (wsl exit $($startUser.ExitCode))" }
 
 Log "Verifying passwordless sudo for '$Username'"
-wsl -d $Distro -u $Username -- sudo -n true
-if ($LASTEXITCODE -ne 0) { Die "Passwordless sudo is not working for '$Username' inside $Distro (wsl/sudo exit $LASTEXITCODE)." }
+$sudoCheck = Invoke-NativeCaptured { wsl -d $Distro -u $Username -- sudo -n true }
+if ($sudoCheck.Output) { Write-Host $sudoCheck.Output }
+if ($sudoCheck.ExitCode -ne 0) { Die "Passwordless sudo is not working for '$Username' inside $Distro (wsl/sudo exit $($sudoCheck.ExitCode))." }
 
 $installText = ConvertTo-LfText ([IO.File]::ReadAllText($installSh))
 $utf8NoBom = New-Object System.Text.UTF8Encoding -ArgumentList $false
@@ -292,13 +323,15 @@ for ($copyTry = 1; $copyTry -le 10 -and -not $installDest; $copyTry++) {
 if (-not $installDest) {
   Die ("Failed to copy install.sh into WSL via \\wsl`$ or \\wsl.localhost. Last error: {0}" -f $copyError)
 }
-wsl -d $Distro -u $Username -- test -s "$linuxHome/install.sh"
-if ($LASTEXITCODE -ne 0) { Die "Copied install.sh is not readable inside WSL (wsl exit $LASTEXITCODE)" }
+$copyCheck = Invoke-NativeCaptured { wsl -d $Distro -u $Username -- test -s "$linuxHome/install.sh" }
+if ($copyCheck.Output) { Write-Host $copyCheck.Output }
+if ($copyCheck.ExitCode -ne 0) { Die "Copied install.sh is not readable inside WSL (wsl exit $($copyCheck.ExitCode))" }
 
 # ---------- 8. Run install.sh inside Ubuntu as the user ----------
 Log "Running install.sh inside $Distro (packages, zsh, Claude, skills - takes several minutes)"
-wsl -d $Distro -u $Username --cd $linuxHome -- bash -lc "bash ~/install.sh"
-$installRc = $LASTEXITCODE
+$installResult = Invoke-NativeCaptured { wsl -d $Distro -u $Username --cd $linuxHome -- bash -lc "bash ~/install.sh" }
+if ($installResult.Output) { Write-Host $installResult.Output }
+$installRc = $installResult.ExitCode
 # install.sh exit convention: 0=ok, 1-99=N skill failures (warn, continue),
 # 100+=fatal (die, abort the rest of bootstrap including the Claude auto-launch).
 if ($installRc -ge 100) {

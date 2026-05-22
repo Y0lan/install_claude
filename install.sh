@@ -103,6 +103,37 @@ fi
 # Make sure ~/.local/bin is in PATH for the rest of this script
 export PATH="$HOME/.local/bin:$PATH"
 
+install_eza_if_needed() {
+  if have eza; then return 0; fi
+
+  log "Installing eza"
+  if retry 2 sudo DEBIAN_FRONTEND=noninteractive apt-get install -y "${APT_OPTS[@]}" eza; then
+    return 0
+  fi
+
+  log "eza unavailable from current apt sources; adding eza community apt repo"
+  local key_tmp eza_arch
+  key_tmp="$(mktemp)"
+  if retry 3 wget -qO "$key_tmp" https://raw.githubusercontent.com/eza-community/eza/main/deb.asc &&
+     sudo mkdir -p /etc/apt/keyrings &&
+     sudo gpg --batch --yes --dearmor -o /etc/apt/keyrings/gierens.gpg "$key_tmp"; then
+    rm -f "$key_tmp"
+    eza_arch="$(dpkg --print-architecture)"
+    echo "deb [arch=$eza_arch signed-by=/etc/apt/keyrings/gierens.gpg] http://deb.gierens.de stable main" | sudo tee /etc/apt/sources.list.d/gierens.list >/dev/null
+    sudo chmod 644 /etc/apt/keyrings/gierens.gpg /etc/apt/sources.list.d/gierens.list
+    if retry 3 sudo DEBIAN_FRONTEND=noninteractive apt-get update -y &&
+       retry 3 sudo DEBIAN_FRONTEND=noninteractive apt-get install -y "${APT_OPTS[@]}" eza; then
+      return 0
+    fi
+  else
+    rm -f "$key_tmp"
+  fi
+
+  log "WARN: eza install failed; listing aliases will fall back to GNU ls"
+  return 1
+}
+install_eza_if_needed || true
+
 # ---------- 3. Google Chrome .deb (real .deb - snap chromium is broken in WSL) ----------
 log "Installing Google Chrome (real .deb; snap chromium doesn't work in WSL)"
 if ! have google-chrome; then
@@ -294,16 +325,26 @@ alias ...='cd ../..'
 alias ....='cd ../../..'
 
 # ===== listing =====
-alias l='eza --icons=auto'
-alias ls='eza -lh --group-directories-first --icons=auto'
-alias ll='eza -lh --group-directories-first --icons=auto'
-alias la='eza -lha --group-directories-first --icons=auto'
-alias lsa='ls -a'
-alias lt='eza --tree --level=2 --long --icons --git'
-alias lta='lt -a'
+if command -v eza >/dev/null 2>&1; then
+  alias l='eza --icons=auto'
+  alias ls='eza -lh --group-directories-first --icons=auto'
+  alias ll='eza -lh --group-directories-first --icons=auto'
+  alias la='eza -lha --group-directories-first --icons=auto'
+  alias lsa='ls -a'
+  alias lt='eza --tree --level=2 --long --icons --git'
+  alias lta='lt -a'
+else
+  alias l='command ls --color=auto'
+  alias ls='command ls -lh --group-directories-first --color=auto'
+  alias ll='command ls -lh --group-directories-first --color=auto'
+  alias la='command ls -lha --group-directories-first --color=auto'
+  alias lsa='command ls -a --color=auto'
+  alias lt='find . -maxdepth 2 -print'
+  alias lta='find . -maxdepth 2 -print'
+fi
 
 # ===== AI / Omarchy-style =====
-alias c='opencode'
+alias c='codex'
 alias cx='printf "\033[2J\033[3J\033[H" && claude --permission-mode bypassPermissions'
 alias t='tmux attach || tmux new -s Work'
 alias ic='tdl c'

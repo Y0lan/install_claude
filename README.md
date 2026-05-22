@@ -52,7 +52,7 @@ If WSL features had to be enabled for the first time, the script will tell you t
 - Reuses existing `Ubuntu-22.04` without prompting to destroy it; `-CleanInstall` is the only WSL wipe path
 - Installs Ubuntu-22.04 as the default WSL distro
 - Provisions your Linux user with **passwordless sudo** and `systemd` enabled
-- Installs Node LTS, Bun, Google Chrome (real `.deb`, not snap), zsh + oh-my-zsh + Pure prompt, ripgrep, fd, fzf, bat, etc.
+- Installs Node LTS, Bun, Google Chrome (real `.deb`, not snap), zsh + oh-my-zsh + Pure prompt, `eza`, ripgrep, fd, fzf, bat, etc.
 - Installs Claude Code (`claude`), OpenAI Codex CLI (`codex`), `claude-mem`, and clones into `~/.claude/skills/`:
   - [`garrytan/gstack`](https://github.com/garrytan/gstack)
   - [`forrestchang/andrej-karpathy-skills`](https://github.com/forrestchang/andrej-karpathy-skills)
@@ -129,7 +129,7 @@ The managed zsh block includes these aliases and helpers:
 
 ```bash
 # AI / Omarchy-style
-c     # opencode
+c     # codex
 cx    # clear screen, then claude --permission-mode bypassPermissions
 ic    # tdl c
 ix    # tdl cx
