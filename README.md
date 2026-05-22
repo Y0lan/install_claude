@@ -6,13 +6,31 @@ End state: open a Desktop shortcut -> lands in `~` in `zsh` -> Claude Code opens
 
 ## Run it
 
-Open an **Administrator PowerShell** window, then paste this single line:
+Open an **Administrator PowerShell** window, then paste one of these.
+
+### First time (or after a fresh re-clone)
 
 ```powershell
 git clone https://github.com/Y0lan/install_claude "$env:TEMP\install_claude"; cd "$env:TEMP\install_claude"; Set-ExecutionPolicy -Scope Process Bypass -Force; .\bootstrap.ps1
 ```
 
-That's it. If WSL features had to be enabled for the first time, the script will tell you to reboot - reboot, then paste the same line again (every step is idempotent and resumes cleanly).
+### Re-run after a reboot, a fix, or any partial install
+
+Pulls the latest version of the scripts and re-runs from the existing clone. Every step is idempotent, so this picks up cleanly from wherever the previous run stopped:
+
+```powershell
+cd "$env:TEMP\install_claude"; git pull; Set-ExecutionPolicy -Scope Process Bypass -Force; .\bootstrap.ps1
+```
+
+### Nuke and start over (clean re-clone)
+
+If you suspect the local clone is in a weird state and you want a guaranteed fresh start:
+
+```powershell
+Remove-Item -Recurse -Force "$env:TEMP\install_claude"; git clone https://github.com/Y0lan/install_claude "$env:TEMP\install_claude"; cd "$env:TEMP\install_claude"; Set-ExecutionPolicy -Scope Process Bypass -Force; .\bootstrap.ps1
+```
+
+If WSL features had to be enabled for the first time, the script will tell you to reboot - reboot, then paste the **Re-run** line above.
 
 ## What it does
 
