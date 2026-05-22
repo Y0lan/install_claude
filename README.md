@@ -14,8 +14,9 @@ Remove-Item -Recurse -Force "$env:TEMP\install_claude" -ErrorAction SilentlyCont
 ```
 
 Pendant l’install :
-- `gstack` / Matt Pocock → laissez les défauts (Entrée)
+- `gstack` → laissez les défauts (Entrée)
 - `claude-mem` → cochez **Claude Code + Codex CLI**, puis choisissez **Claude Code** pour la suite
+- Matt Pocock (`SKILLS`) → choisissez **Claude**, **Global**, et **Symlink**
 - si Windows demande un reboot, redémarrez puis relancez (voir §4)
 
 ## 2. Se connecter
