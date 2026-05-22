@@ -30,21 +30,14 @@ function Log($msg, $color = "Cyan") {
 function Warn($msg) { Write-Host "    ! $msg" -ForegroundColor Yellow }
 function Die ($msg) { Write-Host "    X $msg" -ForegroundColor Red; exit 1 }
 
-# Strip CR bytes so anything we hand to bash inside WSL has pure LF endings.
+# Strip CR bytes so any here-string we hand to bash inside WSL has pure LF endings.
 # Git on Windows defaults to core.autocrlf=true, which CRLF-ifies any text file
-# on checkout (including our .ps1 here-strings and .sh script). Bash chokes on
-# `set -e\r`, on heredoc delimiters that don't match because of trailing \r,
-# and on scripts whose every line ends in `\r`. .gitattributes prevents this
-# on FUTURE clones; this function fixes it at runtime for clones already done.
+# on checkout. Bash chokes on `set -e\r` and on heredoc delimiters that don't
+# match because of trailing \r. .gitattributes prevents this on FUTURE clones;
+# this function fixes it at runtime for clones already done.
 function ConvertTo-LfText {
   param([string]$s)
   return ($s -replace "`r`n", "`n") -replace "`r", "`n"
-}
-function ConvertTo-LfBytes {
-  param([byte[]]$bytes)
-  $out = New-Object System.IO.MemoryStream
-  foreach ($b in $bytes) { if ($b -ne 0x0d) { $out.WriteByte($b) } }
-  return $out.ToArray()
 }
 
 # Native-exe call helper. $ErrorActionPreference="Stop" does NOT trap non-zero
@@ -250,18 +243,18 @@ wsl --set-default $Distro
 # Terminate so wsl.conf takes effect on next launch
 wsl --terminate $Distro 2>$null | Out-Null
 
-# ---------- 7. Copy install.sh into Ubuntu (stream via stdin - no argv-size limit, no quoting traps) ----------
+# ---------- 7. Copy install.sh into Ubuntu ----------
 $installSh = Join-Path $PSScriptRoot "install.sh"
 if (-not (Test-Path $installSh)) {
   Die "install.sh not found beside bootstrap.ps1. Both files must be in the same folder."
 }
-Log "Streaming install.sh into ~$Username/install.sh via stdin (avoids argv-size limit)"
-# Base64-encode then pipe over stdin so wsl.exe sees a tiny invariant argv.
-# Bash receives the b64 on stdin, decodes to ~/install.sh, sets +x.
-$installBytes = [byte[]](ConvertTo-LfBytes ([IO.File]::ReadAllBytes($installSh)))
-$b64 = [Convert]::ToBase64String($installBytes)
-$b64 | & wsl -d $Distro -u $Username --cd "~" -- bash -c 'set -e; base64 -d > ~/install.sh && chmod +x ~/install.sh'
-if ($LASTEXITCODE -ne 0) { Die "Failed to copy install.sh into WSL (wsl/base64 exit $LASTEXITCODE)" }
+Log "Copying install.sh into ~$Username/install.sh"
+# Avoid a PowerShell text pipeline here. On some Windows PowerShell/locale
+# combinations, piping a long base64 string through wsl.exe corrupts stdin and
+# Ubuntu's `base64 -d` reports "invalid input". Let WSL read the Windows file
+# directly and strip CR bytes while writing the Linux copy.
+wsl -d $Distro -u $Username --cd "~" -- bash -c 'set -e; src=$(wslpath -u "$1"); tr -d "\r" < "$src" > ~/install.sh; chmod +x ~/install.sh; test -s ~/install.sh' _ $installSh
+if ($LASTEXITCODE -ne 0) { Die "Failed to copy install.sh into WSL (wsl exit $LASTEXITCODE)" }
 
 # ---------- 8. Run install.sh inside Ubuntu as the user ----------
 Log "Running install.sh inside $Distro (packages, zsh, Claude, skills - takes several minutes)"
