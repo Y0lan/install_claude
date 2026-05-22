@@ -119,9 +119,15 @@ if (Test-WslWorks) {
 
 # ---------- 2. WSL update + default version ----------
 Log "Updating WSL kernel (best-effort)"
-try { wsl --update --web-download 2>&1 | Out-Host } catch { Warn "wsl --update failed (often fine on locked-down corp machines): $_" }
+try {
+  wsl --update --web-download 2>&1 | Out-Host
+  if ($LASTEXITCODE -ne 0) { Warn "wsl --update exited $LASTEXITCODE (often fine on locked-down corp machines)" }
+} catch {
+  Warn "wsl --update failed (often fine on locked-down corp machines): $_"
+}
 Log "Setting WSL default version to 2"
 wsl --set-default-version 2 | Out-Null
+if ($LASTEXITCODE -ne 0) { Die "wsl --set-default-version 2 failed (exit $LASTEXITCODE). Check WSL install/update output above." }
 
 # ---------- 3. Install Ubuntu-22.04 (no auto-launch) ----------
 # Normalize `wsl -l -q` output: strips NULs (UTF-16 artifact) and CRs.
@@ -239,6 +245,7 @@ if (-not $launcherSet) {
 # ---------- 6. Default WSL distro ----------
 Log "Setting $Distro as default WSL distro"
 wsl --set-default $Distro
+if ($LASTEXITCODE -ne 0) { Die "wsl --set-default $Distro failed (exit $LASTEXITCODE)." }
 
 # Terminate so wsl.conf takes effect on next launch
 wsl --terminate $Distro 2>$null | Out-Null
@@ -259,15 +266,16 @@ $installText = ConvertTo-LfText ([IO.File]::ReadAllText($installSh))
 $utf8NoBom = New-Object System.Text.UTF8Encoding -ArgumentList $false
 $copyError = $null
 $installDest = $null
+$linuxHome = "/home/$Username"
 $wslRoots = @(('\\wsl$\' + $Distro), ('\\wsl.localhost\' + $Distro))
 for ($copyTry = 1; $copyTry -le 10 -and -not $installDest; $copyTry++) {
   foreach ($root in $wslRoots) {
-    $home = Join-Path (Join-Path $root "home") $Username
-    if (-not (Test-Path $home)) {
-      $copyError = "WSL home path not found yet: $home"
+    $wslHomePath = Join-Path (Join-Path $root "home") $Username
+    if (-not (Test-Path $wslHomePath)) {
+      $copyError = "WSL home path not found yet: $wslHomePath"
       continue
     }
-    $candidate = Join-Path $home "install.sh"
+    $candidate = Join-Path $wslHomePath "install.sh"
     try {
       [IO.File]::WriteAllText($candidate, $installText, $utf8NoBom)
       if ((Test-Path $candidate) -and ((Get-Item $candidate).Length -gt 0)) {
@@ -283,10 +291,14 @@ for ($copyTry = 1; $copyTry -le 10 -and -not $installDest; $copyTry++) {
 if (-not $installDest) {
   Die ("Failed to copy install.sh into WSL via \\wsl`$ or \\wsl.localhost. Last error: {0}" -f $copyError)
 }
+wsl -d $Distro -u root -- chown $Username "$linuxHome/install.sh" 2>$null | Out-Null
+if ($LASTEXITCODE -ne 0) { Warn "Could not chown ~/install.sh to $Username (continuing; bash only needs read access)" }
+wsl -d $Distro -u root -- chmod 0644 "$linuxHome/install.sh" 2>$null | Out-Null
+if ($LASTEXITCODE -ne 0) { Warn "Could not chmod ~/install.sh (continuing; bash only needs read access)" }
 
 # ---------- 8. Run install.sh inside Ubuntu as the user ----------
 Log "Running install.sh inside $Distro (packages, zsh, Claude, skills - takes several minutes)"
-wsl -d $Distro -u $Username --cd "~" -- bash -lc "bash ~/install.sh"
+wsl -d $Distro -u $Username --cd $linuxHome -- bash -lc "bash ~/install.sh"
 $installRc = $LASTEXITCODE
 # install.sh exit convention: 0=ok, 1-99=N skill failures (warn, continue),
 # 100+=fatal (die, abort the rest of bootstrap including the Claude auto-launch).
@@ -299,27 +311,32 @@ if ($installRc -gt 0) {
 
 # ---------- 9. FiraCode Nerd Font (ligatures!) ----------
 Log "Installing FiraCode Nerd Font (ligatures included)"
-$fontDir = Join-Path $env:TEMP "FiraCodeNF"
-$fontZip = "$fontDir.zip"
-if (-not (Test-Path $fontDir)) {
-  Invoke-WebRequest -Uri "https://github.com/ryanoasis/nerd-fonts/releases/latest/download/FiraCode.zip" `
-                    -OutFile $fontZip -UseBasicParsing
-  Expand-Archive -Force $fontZip $fontDir
-  Remove-Item $fontZip -ErrorAction SilentlyContinue
-}
-$shellApp = New-Object -ComObject Shell.Application
-$fontsFolder = $shellApp.Namespace(0x14)
-$installedCount = 0
-Get-ChildItem $fontDir -Filter "*.ttf" -File | ForEach-Object {
-  $already = Test-Path (Join-Path "$env:WINDIR\Fonts" $_.Name)
-  if (-not $already) {
-    $fontsFolder.CopyHere($_.FullName, 0x10)  # 0x10 = no-confirm
-    $installedCount++
+try {
+  $fontDir = Join-Path $env:TEMP "FiraCodeNF"
+  $fontZip = "$fontDir.zip"
+  if (-not (Test-Path $fontDir)) {
+    Invoke-WebRequest -Uri "https://github.com/ryanoasis/nerd-fonts/releases/latest/download/FiraCode.zip" `
+                      -OutFile $fontZip -UseBasicParsing
+    Expand-Archive -Force $fontZip $fontDir
+    Remove-Item $fontZip -ErrorAction SilentlyContinue
   }
+  $shellApp = New-Object -ComObject Shell.Application
+  $fontsFolder = $shellApp.Namespace(0x14)
+  if (-not $fontsFolder) { throw "Could not open Windows Fonts shell namespace" }
+  $installedCount = 0
+  Get-ChildItem $fontDir -Filter "*.ttf" -File | ForEach-Object {
+    $already = Test-Path (Join-Path "$env:WINDIR\Fonts" $_.Name)
+    if (-not $already) {
+      $fontsFolder.CopyHere($_.FullName, 0x10)  # 0x10 = no-confirm
+      $installedCount++
+    }
+  }
+  Write-Host "    Installed $installedCount new font file(s)"
+  # Give the COM font installer a moment to actually register the fonts before WT reads them
+  if ($installedCount -gt 0) { Start-Sleep -Seconds 3 }
+} catch {
+  Warn "FiraCode Nerd Font install failed/skipped: $_"
 }
-Write-Host "    Installed $installedCount new font file(s)"
-# Give the COM font installer a moment to actually register the fonts before WT reads them
-if ($installedCount -gt 0) { Start-Sleep -Seconds 3 }
 
 # ---------- 10. Windows Terminal: font + start-in-home (safe parse, backup-restore on failure) ----------
 # Probe all three known WT package names. Same class of "trust the truth, not
@@ -367,7 +384,7 @@ if ($wtSettings) {
     if ($profileList) {
       $ubuntu = $profileList | Where-Object { $_ -and $_.PSObject.Properties['name'] -and ($_.name -like "*$Distro*") } | Select-Object -First 1
       if ($ubuntu) {
-        $ubuntu | Add-Member -NotePropertyName commandline       -NotePropertyValue "wsl.exe -d `"$Distro`" --cd ~ -- zsh -l" -Force
+        $ubuntu | Add-Member -NotePropertyName commandline       -NotePropertyValue "wsl.exe -d `"$Distro`" --cd $linuxHome -- zsh -l" -Force
         $ubuntu | Add-Member -NotePropertyName startingDirectory -NotePropertyValue "\\wsl$\$Distro\home\$Username"          -Force
         if ($ubuntu.PSObject.Properties['guid']) { $json.defaultProfile = $ubuntu.guid }
       } else {
@@ -385,7 +402,7 @@ if ($wtSettings) {
     Write-Host "    Manual steps to apply the same changes:" -ForegroundColor Yellow
     Write-Host "      1. Open WT -> Settings -> Profiles -> Defaults -> Appearance -> Font face: 'FiraCode Nerd Font Mono'" -ForegroundColor Yellow
     Write-Host "      2. Set default profile to '$Distro'" -ForegroundColor Yellow
-    Write-Host "      3. In the '$Distro' profile, set Command line: wsl.exe -d $Distro --cd ~ -- zsh -l" -ForegroundColor Yellow
+    Write-Host "      3. In the '$Distro' profile, set Command line: wsl.exe -d $Distro --cd $linuxHome -- zsh -l" -ForegroundColor Yellow
     Write-Host "      4. Starting directory: \\wsl`$\$Distro\home\$Username" -ForegroundColor Yellow
   }
 } else {
@@ -402,10 +419,10 @@ $sc = $wsh.CreateShortcut($shortcut)
 $wt = Get-Command wt.exe -ErrorAction SilentlyContinue
 if ($wt) {
   $sc.TargetPath = $wt.Source
-  $sc.Arguments  = "new-tab wsl.exe -d `"$Distro`" --cd ~ -- zsh -l"
+  $sc.Arguments  = "new-tab wsl.exe -d `"$Distro`" --cd $linuxHome -- zsh -l"
 } else {
   $sc.TargetPath = "wsl.exe"
-  $sc.Arguments  = "-d `"$Distro`" --cd ~ -- zsh -l"
+  $sc.Arguments  = "-d `"$Distro`" --cd $linuxHome -- zsh -l"
 }
 $sc.WorkingDirectory = $env:USERPROFILE
 $sc.IconLocation     = "wsl.exe,0"
@@ -416,9 +433,9 @@ $sc.Save()
 Log "Opening a fresh terminal - zsh will launch Claude Code for OAuth automatically" "Green"
 Start-Sleep -Seconds 1
 if ($wt) {
-  Start-Process $wt.Source -ArgumentList @("new-tab","wsl.exe","-d",$Distro,"--cd","~","--","zsh","-l")
+  Start-Process $wt.Source -ArgumentList @("new-tab","wsl.exe","-d",$Distro,"--cd",$linuxHome,"--","zsh","-l")
 } else {
-  Start-Process "wsl.exe" -ArgumentList @("-d",$Distro,"--cd","~","--","zsh","-l")
+  Start-Process "wsl.exe" -ArgumentList @("-d",$Distro,"--cd",$linuxHome,"--","zsh","-l")
 }
 
 Log "DONE." "Green"
@@ -426,7 +443,7 @@ Write-Host ""
 Write-Host "  Desktop shortcut: $shortcut" -ForegroundColor Green
 Write-Host "  Linux user:       $Username  (passwordless sudo, empty password)" -ForegroundColor Green
 Write-Host "  Default distro:   $Distro" -ForegroundColor Green
-if (-not $wtPatched -and (Test-Path $wtSettings)) {
+if (-not $wtPatched -and $wtSettings -and (Test-Path $wtSettings)) {
   Write-Host "  WT settings:      NOT patched - see manual steps printed above." -ForegroundColor Yellow
 }
 Write-Host ""
