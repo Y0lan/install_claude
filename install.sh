@@ -46,6 +46,44 @@ retry() {
   done
   return "$rc"
 }
+optional_enabled() {
+  case "${1:-}" in
+    1|true|TRUE|yes|YES|y|Y|oui|OUI|o|O) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+choose_optional() {
+  local var_name="$1" label="$2" default="${3:-Y}" current answer normalized value
+  current="${!var_name:-}"
+
+  if [ -n "$current" ]; then
+    if optional_enabled "$current"; then
+      printf -v "$var_name" '%s' "1"
+    else
+      printf -v "$var_name" '%s' "0"
+    fi
+    return 0
+  fi
+
+  if [ ! -t 0 ]; then
+    value=$([ "$default" = "Y" ] && printf '1' || printf '0')
+    printf -v "$var_name" '%s' "$value"
+    return 0
+  fi
+
+  read -r -p "  $label [$default/n]: " answer
+  answer="${answer:-$default}"
+  normalized="${answer,,}"
+  case "$normalized" in
+    y|yes|o|oui|1) value=1 ;;
+    n|no|non|0) value=0 ;;
+    *) value=$([ "$default" = "Y" ] && printf '1' || printf '0') ;;
+  esac
+  printf -v "$var_name" '%s' "$value"
+}
+yn_label() {
+  if optional_enabled "$1"; then printf 'yes'; else printf 'no'; fi
+}
 
 if [ "$EUID" -eq 0 ]; then
   echo "Don't run install.sh as root. Run as your normal user." >&2
@@ -61,12 +99,15 @@ if ! sudo -n true 2>/dev/null; then
   exit 100
 fi
 log "User: $USER_NAME - home: $HOME - skip-skill-setup: $SKIP_SKILL_SETUP"
-log "Expect 10-30 min total (apt updates, npm globals, gstack runs playwright install ~300MB)."
-log "A few steps will pause for input - that's intentional:"
-log "  - gstack/setup asks about skill name prefix (10s timeout, default is fine)"
-log "  - npx claude-mem install: pick Claude Code + Codex for harness, then Claude Code for provider"
-log "  - claude OAuth at the very end (browser-based, no typing)"
-log "Answer at your own pace - nothing is on a hard deadline."
+log "Expect 10-30 min total (apt updates, npm globals, selected skills/tools)."
+log "Mandatory skills/tools: claude-mem, Karpathy."
+log "Choose optional skills/tools. Press Enter to keep the recommended defaults."
+choose_optional INSTALL_GSTACK "Install gstack" "Y"
+choose_optional INSTALL_SUPERPOWERS "Install Superpowers" "Y"
+choose_optional INSTALL_MATT_POCOCK "Run Matt Pocock skills installer" "Y"
+log "Mandatory: claude-mem=yes, karpathy=yes"
+log "Optional choices: gstack=$(yn_label "$INSTALL_GSTACK"), superpowers=$(yn_label "$INSTALL_SUPERPOWERS"), matt-pocock=$(yn_label "$INSTALL_MATT_POCOCK")"
+log "Some selected steps may pause for input - that's intentional. Answer at your own pace."
 
 # Accumulator for skill-clone failures (reported at end, doesn't abort the script)
 declare -a SKILL_FAILURES=()
@@ -785,10 +826,25 @@ GSTACK_REPO="https://github.com/garrytan/gstack.git"
 KARPATHY_REPO="https://github.com/forrestchang/andrej-karpathy-skills.git"
 SUPERPOWERS_REPO="https://github.com/obra/superpowers.git"
 
-install_gstack       "gstack"                 "$GSTACK_REPO"
-install_skill_bundle "andrej-karpathy-skills" "$KARPATHY_REPO"     "andrej-karpathy-skills"
-install_skill_bundle "superpowers"            "$SUPERPOWERS_REPO"  "obra/superpowers"
-install_matt_pocock_skills
+if optional_enabled "$INSTALL_GSTACK"; then
+  install_gstack "gstack" "$GSTACK_REPO"
+else
+  log "  gstack: skipped by selection"
+fi
+
+install_skill_bundle "andrej-karpathy-skills" "$KARPATHY_REPO" "andrej-karpathy-skills"
+
+if optional_enabled "$INSTALL_SUPERPOWERS"; then
+  install_skill_bundle "superpowers" "$SUPERPOWERS_REPO" "obra/superpowers"
+else
+  log "  superpowers: skipped by selection"
+fi
+
+if optional_enabled "$INSTALL_MATT_POCOCK"; then
+  install_matt_pocock_skills
+else
+  log "  mattpocock/skills: skipped by selection"
+fi
 
 # Alternative install path for superpowers (via Claude Code marketplace, after OAuth):
 #   /plugin install superpowers@claude-plugins-official
