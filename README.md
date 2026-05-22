@@ -31,7 +31,10 @@ Attention : tous les fichiers Linux dans les Ubuntu WSL supprimés seront perdus
 Remove-Item -Recurse -Force "$env:TEMP\install_claude" -ErrorAction SilentlyContinue; git clone https://github.com/Y0lan/install_claude "$env:TEMP\install_claude"; cd "$env:TEMP\install_claude"; Set-ExecutionPolicy -Scope Process Bypass -Force; .\bootstrap.ps1 -CleanInstall
 ```
 
-Si le script détecte un Ubuntu WSL existant, il demandera confirmation. Appuyez simplement sur **Entrée** pour le supprimer et repartir proprement.
+Si le script détecte un Ubuntu WSL existant, il demandera confirmation :
+
+- **Entrée** : supprime Ubuntu et repart de zéro
+- `KEEP` : garde Ubuntu et ajoute ce qui manque
 
 ## 3. Si le script demande un redémarrage
 
@@ -45,7 +48,7 @@ Si le script active WSL et demande de redémarrer :
 cd "$env:TEMP\install_claude"; git pull; Set-ExecutionPolicy -Scope Process Bypass -Force; .\bootstrap.ps1
 ```
 
-Ne relancez pas `-CleanInstall` après le reboot, sinon Ubuntu sera supprimé une deuxième fois.
+Quand le script redétecte Ubuntu après le reboot, tapez `KEEP` si vous voulez continuer l’installation déjà commencée. Appuyez sur Entrée uniquement si vous voulez vraiment repartir de zéro.
 
 ## 4. Si l’installation échoue au milieu
 
@@ -54,6 +57,8 @@ Relancez simplement :
 ```powershell
 cd "$env:TEMP\install_claude"; git pull; Set-ExecutionPolicy -Scope Process Bypass -Force; .\bootstrap.ps1
 ```
+
+Quand le script demande quoi faire avec Ubuntu, tapez `KEEP` pour reprendre sans supprimer. Appuyez sur Entrée pour tout effacer et recommencer proprement.
 
 Si `git pull` refuse à cause de changements locaux dans le dossier temporaire :
 

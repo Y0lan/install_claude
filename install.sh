@@ -123,12 +123,15 @@ install_eza_if_needed() {
     return 0
   fi
 
-  log "Installing eza"
-  if retry 2 sudo DEBIAN_FRONTEND=noninteractive apt-get install -y "${APT_OPTS[@]}" eza; then
-    return 0
+  if apt-cache show eza >/dev/null 2>&1; then
+    log "Installing eza"
+    if retry 2 sudo DEBIAN_FRONTEND=noninteractive apt-get install -y "${APT_OPTS[@]}" eza; then
+      return 0
+    fi
+  else
+    log "eza is not available in current apt sources; adding eza community apt repo"
   fi
 
-  log "eza unavailable from current apt sources; adding eza community apt repo"
   local key_tmp eza_arch
   key_tmp="$(mktemp)"
   if retry 3 wget -qO "$key_tmp" https://raw.githubusercontent.com/eza-community/eza/main/deb.asc &&
@@ -282,11 +285,15 @@ fi
 ZSH_CUSTOM="${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}"
 clone_if_needed() {
   local repo="$1" dest="$2" sentinel="$3"
+  local name
+  name="$(basename "$dest")"
   if [ ! -f "$dest/$sentinel" ]; then
     [ -d "$dest" ] && rm -rf "$dest"
+    log "Installing $name"
     retry 3 git clone --depth=1 "$repo" "$dest"
+    log "$name cloned"
   else
-    log "$(basename "$dest") already installed; skipping clone"
+    log "$name already installed; skipping clone"
   fi
 }
 clone_if_needed https://github.com/zsh-users/zsh-autosuggestions       "$ZSH_CUSTOM/plugins/zsh-autosuggestions"       "zsh-autosuggestions.zsh"

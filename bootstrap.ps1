@@ -14,9 +14,8 @@
 param(
   [string]$Distro   = "Ubuntu-22.04",
   [string]$Username = ($env:USERNAME.ToLower() -replace '[^a-z0-9_-]', ''),
-  # If set, existing Ubuntu* distros are wiped WITHOUT the interactive
-  # "WIPE" confirmation. DANGEROUS - only use this for automation/CI when
-  # you've already confirmed the box has no data you care about.
+  # Kept for the fresh-install README command. Existing Ubuntu* distros always
+  # trigger an interactive prompt; pressing Enter deletes them by default.
   [switch]$CleanInstall
 )
 
@@ -244,7 +243,7 @@ if (Test-WslWorks) {
 # ---------- 2. WSL update + default version ----------
 Log "Updating WSL kernel (best-effort)"
 try {
-  $updateResult = Invoke-NativeStreamed { wsl --update --web-download }
+  $updateResult = Invoke-NativePassthrough { wsl --update --web-download }
   if ($updateResult.ExitCode -ne 0) { Warn "wsl --update exited $($updateResult.ExitCode) (often fine on locked-down corp machines)" }
 } catch {
   Warn "wsl --update failed (often fine on locked-down corp machines): $_"
@@ -261,9 +260,8 @@ function Get-InstalledDistros {
   ($raw -replace "`0","" -split "`r?`n") | Where-Object { $_.Trim() } | ForEach-Object { $_.Trim() }
 }
 
-# 3a. Detect existing Ubuntu* distros. Normal reruns reuse $Distro if present
-# and apply missing/bootstrap state idempotently. -CleanInstall is the explicit
-# fresh-start path, but still asks before deleting existing Ubuntu data.
+# 3a. Detect existing Ubuntu* distros. Always ask: Enter is the clean default,
+# KEEP is the explicit idempotent/rerun path.
 $existingUbuntu = @(Get-InstalledDistros | Where-Object { $_ -match '^Ubuntu' })
 if ($existingUbuntu.Count -gt 0) {
   Write-Host ""
@@ -273,24 +271,26 @@ if ($existingUbuntu.Count -gt 0) {
 
   $shouldWipe = $false
   if ($CleanInstall) {
-    Warn "-CleanInstall requested: the listed Ubuntu WSL distro(s) will be deleted before reinstalling $Distro."
-    Write-Host ""
-    Write-Host "    Press Enter to DELETE them and start fresh." -ForegroundColor Yellow
-    Write-Host "    Type KEEP then Enter to cancel deletion and reuse what is already there." -ForegroundColor Yellow
-    Write-Host ""
-    $answer = Read-Host "Delete existing Ubuntu WSL distro(s)? [DELETE/keep] (default: DELETE)"
-    if ([string]::IsNullOrWhiteSpace($answer) -or $answer -match '^(DELETE|DESTROY|WIPE|YES|Y)$') {
-      $shouldWipe = $true
-    } else {
-      Warn "Keeping existing Ubuntu WSL distro(s); continuing idempotent install without wiping."
-    }
+    Warn "-CleanInstall requested."
+  } else {
+    Warn "Existing Ubuntu WSL distro(s) detected."
+  }
+  Write-Host ""
+  Write-Host "    Press Enter to DELETE them and start fresh." -ForegroundColor Yellow
+  Write-Host "    Type KEEP then Enter to reuse what is already there." -ForegroundColor Yellow
+  Write-Host ""
+  $answer = Read-Host "Delete existing Ubuntu WSL distro(s)? [DELETE/keep] (default: DELETE)"
+  if ([string]::IsNullOrWhiteSpace($answer) -or $answer -match '^(DELETE|DESTROY|WIPE|YES|Y)$') {
+    $shouldWipe = $true
+  } else {
+    Warn "Keeping existing Ubuntu WSL distro(s); continuing idempotent install without wiping."
   }
 
   if ($shouldWipe) {
     foreach ($d in $existingUbuntu) {
       Log "Unregistering $d (PERMANENT DELETE)" "Red"
       $null = Invoke-NativeCaptured { wsl --terminate $d }
-      $unregister = Invoke-NativeStreamed { wsl --unregister $d }
+      $unregister = Invoke-NativePassthrough { wsl --unregister $d }
       if ($unregister.ExitCode -ne 0) { Die "wsl --unregister $d failed (exit $($unregister.ExitCode)). Aborting before partial state can cause confusion." }
     }
     Log "Wipe complete. Continuing with clean install of $Distro." "Green"
@@ -307,7 +307,7 @@ if ($existingUbuntu.Count -gt 0) {
 
 if ((Get-InstalledDistros) -notcontains $Distro) {
   Log "Installing $Distro (no launch)"
-  $installResult = Invoke-NativeStreamed { wsl --install -d $Distro --no-launch }
+  $installResult = Invoke-NativePassthrough { wsl --install -d $Distro --no-launch }
   if ($installResult.ExitCode -ne 0) { Die "wsl --install -d $Distro failed (exit $($installResult.ExitCode)). Check the output above; common cause: distro name unsupported on this WSL build. Try 'wsl --list --online' to see valid names." }
 } else {
   Log "$Distro already installed (reusing existing)"
@@ -356,7 +356,7 @@ appendWindowsPath=true
 WSLCONF
 "@
 $bashUser = ConvertTo-LfText $bashUser
-$provision = Invoke-NativeStreamed { wsl -d $Distro -u root -- bash -c $bashUser }
+$provision = Invoke-NativePassthrough { wsl -d $Distro -u root -- bash -c $bashUser }
 if ($provision.ExitCode -ne 0) { Die "User provisioning inside $Distro failed (wsl exit $($provision.ExitCode)). See output above." }
 
 # Belt-and-suspenders: also try the legacy per-distro launcher exe (ubuntu2204.exe,
@@ -375,7 +375,7 @@ if (-not $launcherSet) {
 
 # ---------- 6. Default WSL distro ----------
 Log "Setting $Distro as default WSL distro"
-$setDefault = Invoke-NativeStreamed { wsl --set-default $Distro }
+$setDefault = Invoke-NativePassthrough { wsl --set-default $Distro }
 if ($setDefault.ExitCode -ne 0) { Die "wsl --set-default $Distro failed (exit $($setDefault.ExitCode))." }
 
 # Terminate so wsl.conf takes effect on next launch
