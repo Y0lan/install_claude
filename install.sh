@@ -560,13 +560,18 @@ fi
 # for harness + provider. For this setup: Claude Code + Codex for harness,
 # then Claude Code for provider.
 log "Installing claude-mem (pick Claude Code + Codex for harness, then Claude Code for provider)"
-if [ ! -d "$HOME/.claude/plugins/marketplaces/thedotmack" ] && [ ! -f "$HOME/.claude-mem/settings.json" ]; then
+CLAUDE_MEM_SETTINGS="$HOME/.claude-mem/settings.json"
+CLAUDE_MEM_PLUGIN_DIR="$HOME/.claude/plugins/marketplaces/thedotmack"
+if [ -f "$CLAUDE_MEM_SETTINGS" ]; then
+  log "claude-mem already configured; skipping"
+else
+  if [ -d "$CLAUDE_MEM_PLUGIN_DIR" ]; then
+    log "claude-mem plugin dir exists but settings are missing; re-running installer"
+  fi
   if ! npx --yes claude-mem@latest install; then
     log "WARN: claude-mem install exited non-zero - run 'npx claude-mem install' manually"
     SKILL_FAILURES+=("claude-mem install failed")
   fi
-else
-  log "claude-mem already installed (settings dir present); skipping"
 fi
 
 # ---------- 11. Claude skills (~/.claude/skills/) ----------
@@ -783,8 +788,10 @@ echo "  Bun:        $(bun --version 2>/dev/null || echo 'missing')"
 echo "  Chrome:     $(google-chrome --version 2>/dev/null || echo 'missing')"
 echo "  Claude:     $(claude --version 2>/dev/null || echo 'missing')"
 echo "  Codex:      $(codex --version 2>/dev/null || echo 'missing')"
-if [ -f "$HOME/.claude-mem/settings.json" ] || [ -d "$HOME/.claude/plugins/marketplaces/thedotmack" ]; then
-  echo "  claude-mem: installed"
+if [ -f "$HOME/.claude-mem/settings.json" ]; then
+  echo "  claude-mem: configured"
+elif [ -d "$HOME/.claude/plugins/marketplaces/thedotmack" ]; then
+  echo "  claude-mem: partial (plugin dir exists, settings missing)"
 else
   echo "  claude-mem: missing"
 fi

@@ -23,6 +23,19 @@ param(
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
+# Force the Windows console + PowerShell native-command bridge to UTF-8 before
+# any WSL output is printed. Without this, UTF-8 bullets/checkmarks from WSL
+# show up in French Windows PowerShell as mojibake.
+try {
+  $Utf8NoBom = New-Object System.Text.UTF8Encoding -ArgumentList $false
+  [Console]::InputEncoding = $Utf8NoBom
+  [Console]::OutputEncoding = $Utf8NoBom
+  $OutputEncoding = $Utf8NoBom
+  $null = & chcp.com 65001
+} catch {
+  # Cosmetic only. The bootstrap still works if the host refuses code-page changes.
+}
+
 function Reset-ConsoleColumn {
   try {
     if (-not [Console]::IsOutputRedirected) {
@@ -110,6 +123,22 @@ function Invoke-NativeStreamed {
     & $Block 2>&1 | ForEach-Object {
       Write-NativeOutputLine $_
     }
+    $rc = $LASTEXITCODE
+  } finally {
+    $ErrorActionPreference = $oldEap
+  }
+  return [pscustomobject]@{ ExitCode = $rc }
+}
+
+function Invoke-NativePassthrough {
+  param([scriptblock]$Block)
+  $oldEap = $ErrorActionPreference
+  try {
+    # Used for interactive WSL commands. Do not pipe stdout/stderr through
+    # PowerShell here: prompts such as `npx claude-mem install` need a real TTY,
+    # and PowerShell's pipeline can also re-decode UTF-8 WSL output incorrectly.
+    $ErrorActionPreference = "Continue"
+    & $Block
     $rc = $LASTEXITCODE
   } finally {
     $ErrorActionPreference = $oldEap
@@ -371,7 +400,6 @@ if ($sudoCheck.Output) { Write-Host $sudoCheck.Output }
 if ($sudoCheck.ExitCode -ne 0) { Die "Passwordless sudo is not working for '$Username' inside $Distro (wsl/sudo exit $($sudoCheck.ExitCode))." }
 
 $installText = ConvertTo-LfText ([IO.File]::ReadAllText($installSh))
-$utf8NoBom = New-Object System.Text.UTF8Encoding -ArgumentList $false
 $copyError = $null
 $installDest = $null
 $linuxHome = "/home/$Username"
@@ -405,7 +433,7 @@ if ($copyCheck.ExitCode -ne 0) { Die "Copied install.sh is not readable inside W
 
 # ---------- 8. Run install.sh inside Ubuntu as the user ----------
 Log "Running install.sh inside $Distro (packages, zsh, Claude, skills - takes several minutes)"
-$installResult = Invoke-NativeStreamed { wsl -d $Distro -u $Username --cd $linuxHome -- bash -lc "bash ~/install.sh" }
+$installResult = Invoke-NativePassthrough { wsl -d $Distro -u $Username --cd $linuxHome -- bash -lc "bash ~/install.sh" }
 $installRc = $installResult.ExitCode
 # install.sh exit convention: 0=ok, 1-99=N skill failures (warn, continue),
 # 100+=fatal (die, abort the rest of bootstrap including the Claude auto-launch).
