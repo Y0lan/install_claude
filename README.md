@@ -93,7 +93,7 @@ Autres alias WSL : `c` (codex), `claude-login`, `t` (tmux), `gst` / `gp` / `gP` 
 
 ## Notes
 
-- `claude-mem` = mémoire entre sessions
+- `claude-mem` = mémoire entre sessions — UI dispo sur <http://localhost:37700>
 - `gstack` = workflows agent (`/ship`, `/review`, `/browse`…)
 - Superpowers = habitudes Claude Code
 - Karpathy = règles strictes de raisonnement
