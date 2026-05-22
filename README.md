@@ -1,104 +1,111 @@
 # install_claude
 
-Bootstrap a Windows dev machine with WSL2 Ubuntu 22.04, Claude Code, Codex, Bun, Node, Chrome, zsh, tmux, useful aliases, and Claude skills.
+Installe un environnement de dev complet dans **WSL2 Ubuntu 22.04** :
+Claude Code, Codex, Bun, Node, Chrome, zsh, tmux, des alias utiles et les skills Claude.
 
-The script is rerunnable. If something is already installed, it skips that step.
+Le script peut être relancé sans risque. Si un outil est déjà installé, il saute l’étape.
 
-End result:
-- Desktop shortcut: `Ubuntu-22.04 (zsh).lnk`
-- Desktop shortcut: `Claude Code (auto).lnk`
-- WSL opens in `~` with zsh and a neutral dark Windows Terminal theme
-- First launch opens Claude Code for OAuth
+## Résultat attendu
 
-## 1. Open Admin PowerShell
+À la fin, vous aurez :
 
-Open **PowerShell as Administrator**.
+- un raccourci Bureau `Ubuntu-22.04 (zsh).lnk`
+- un raccourci Bureau `Claude Code (auto).lnk`
+- un terminal WSL propre, en `zsh`, ouvert dans `~`
+- Claude Code qui se lance pour la connexion OAuth
+- Claude Code, Codex et les skills prêts à l’emploi
 
-Do not run these commands inside WSL.
+## 1. Ouvrir PowerShell en administrateur
 
-## 2. Pick One Command
+Ouvrez **PowerShell en tant qu’administrateur**.
 
-### Normal install or update
+Important : ne lancez pas ces commandes dans WSL.
 
-Use this first. It keeps an existing `Ubuntu-22.04` distro and fills in whatever is missing.
+## 2. Installer
+
+### Installation normale
+
+À utiliser dans la plupart des cas.
+
+Cette commande garde le Ubuntu existant s’il y en a un, et ajoute ce qui manque.
 
 ```powershell
 Remove-Item -Recurse -Force "$env:TEMP\install_claude" -ErrorAction SilentlyContinue; git clone https://github.com/Y0lan/install_claude "$env:TEMP\install_claude"; cd "$env:TEMP\install_claude"; Set-ExecutionPolicy -Scope Process Bypass -Force; .\bootstrap.ps1
 ```
 
-### Fresh install
+### Installation propre depuis zéro
 
-Use this only when you want to delete Ubuntu and start over.
+À utiliser seulement si vous voulez supprimer Ubuntu et repartir de zéro.
 
-This permanently deletes existing Ubuntu WSL distro(s), including all Linux files inside them.
+Attention : cette commande supprime définitivement les distributions Ubuntu WSL existantes, y compris tous les fichiers Linux dedans.
 
 ```powershell
 Remove-Item -Recurse -Force "$env:TEMP\install_claude" -ErrorAction SilentlyContinue; git clone https://github.com/Y0lan/install_claude "$env:TEMP\install_claude"; cd "$env:TEMP\install_claude"; Set-ExecutionPolicy -Scope Process Bypass -Force; .\bootstrap.ps1 -CleanInstall
 ```
 
-### Retry after a failed run
+## 3. Si le script demande un redémarrage
 
-If the repo was already cloned and a run stopped halfway through:
+Si le script active WSL et demande de redémarrer :
+
+1. Redémarrez Windows.
+2. Rouvrez **PowerShell en administrateur**.
+3. Lancez :
 
 ```powershell
 cd "$env:TEMP\install_claude"; git pull; Set-ExecutionPolicy -Scope Process Bypass -Force; .\bootstrap.ps1
 ```
 
-If a new fix was pushed and `git pull` complains, force the temp clone back to GitHub:
+## 4. Si une installation échoue au milieu
+
+Relancez simplement :
+
+```powershell
+cd "$env:TEMP\install_claude"; git pull; Set-ExecutionPolicy -Scope Process Bypass -Force; .\bootstrap.ps1
+```
+
+Si `git pull` refuse à cause de changements locaux dans le dossier temporaire :
 
 ```powershell
 cd "$env:TEMP\install_claude"; git fetch origin; git reset --hard origin/main; Set-ExecutionPolicy -Scope Process Bypass -Force; .\bootstrap.ps1
 ```
 
-## 3. Reboot If Asked
+## 5. Répondre aux questions pendant l’installation
 
-If the script says WSL features were enabled and asks for a reboot:
+Vous pouvez voir quelques prompts :
 
-1. Reboot Windows.
-2. Open **Admin PowerShell** again.
-3. Run the retry command:
+- `gstack` : appuyez sur Entrée, le choix par défaut est OK.
+- `claude-mem` : choisissez `claude-code` pour l’IDE, puis `claude` pour le provider.
+- OAuth Claude : connectez-vous dans le navigateur quand Claude s’ouvre.
 
-```powershell
-cd "$env:TEMP\install_claude"; git pull; Set-ExecutionPolicy -Scope Process Bypass -Force; .\bootstrap.ps1
-```
+## 6. Utiliser l’environnement
 
-## 4. Answer Prompts
+Après l’installation :
 
-During install you may see these prompts:
+- ouvrez `Claude Code (auto).lnk` pour lancer Claude en mode auto
+- ouvrez `Ubuntu-22.04 (zsh).lnk` pour un terminal WSL normal
+- si Claude était déjà ouvert, fermez-le puis rouvrez-le pour voir les nouveaux skills
 
-- `gstack` skill prefix: press Enter or accept the default.
-- `claude-mem`: choose `claude-code` for IDE and `claude` for provider.
-- Claude OAuth: sign in in the browser when Claude opens.
-
-## 5. Use It
-
-After the script finishes:
-
-- Open `Claude Code (auto).lnk` to launch Claude with bypass permissions.
-- Open `Ubuntu-22.04 (zsh).lnk` for a normal WSL terminal.
-- If Claude was already open, restart it so newly installed skills appear.
-
-Inside Claude, check:
+Dans Claude, vérifiez les skills avec :
 
 ```text
 /skills
 ```
 
-For Matt Pocock skills, run:
+Pour les skills Matt Pocock, lancez ensuite :
 
 ```text
 /setup-matt-pocock-skills
 ```
 
-## 6. Quick Verify
+## 7. Vérifier rapidement
 
-Paste this inside the WSL zsh terminal:
+Dans le terminal WSL, collez :
 
 ```bash
-echo "--- versions ---"; node --version; bun --version; google-chrome --version | head -1; claude --version; codex --version; echo "--- visible skills ---"; find ~/.claude/skills -mindepth 2 -maxdepth 2 -name SKILL.md -printf '%h\n' | xargs -r -n1 basename | sort; echo "--- shell ---"; echo "$SHELL"
+echo "--- versions ---"; node --version; bun --version; google-chrome --version | head -1; claude --version; codex --version; echo "--- skills visibles ---"; find ~/.claude/skills -mindepth 2 -maxdepth 2 -name SKILL.md -printf '%h\n' | xargs -r -n1 basename | sort; echo "--- shell ---"; echo "$SHELL"
 ```
 
-You should see versions for Node, Bun, Chrome, Claude, and Codex, plus visible skills such as:
+Vous devez voir des versions pour Node, Bun, Chrome, Claude et Codex, puis des skills comme :
 
 ```text
 gstack
@@ -107,17 +114,17 @@ setup-matt-pocock-skills
 using-superpowers
 ```
 
-## Daily Shortcuts
+## Alias utiles
 
-Useful aliases added to zsh:
+Les alias principaux dans zsh :
 
 ```bash
 c       # codex
-cx      # clear screen, then claude --permission-mode bypassPermissions
+cx      # efface l’écran puis lance claude --permission-mode bypassPermissions
 t       # tmux attach || tmux new -s Work
-ic      # tmux layout with codex
-ix      # tmux layout with cx
-icx     # tmux layout with codex + cx
+ic      # layout tmux avec codex
+ix      # layout tmux avec cx
+icx     # layout tmux avec codex + cx
 
 l       # eza --icons=auto
 ls      # eza -lh --group-directories-first --icons=auto
@@ -135,24 +142,24 @@ glog    # git log --oneline --graph --decorate -20
 
 ..      # cd ..
 ...     # cd ../..
-reload  # source ~/.bashrc
-please  # rerun last command with sudo
-path    # print PATH line by line
+reload  # recharge ~/.bashrc
+please  # relance la dernière commande avec sudo
+path    # affiche PATH ligne par ligne
 ```
 
-## What Gets Installed
+## Ce qui est installé
 
 - WSL2 Ubuntu 22.04
-- Passwordless sudo for the Linux user
-- systemd in WSL
+- sudo sans mot de passe pour l’utilisateur Linux
+- systemd dans WSL
 - zsh, oh-my-zsh, Pure prompt, tmux, fzf, ripgrep, fd, bat, eza
 - Node LTS, Bun, Google Chrome
 - Claude Code, OpenAI Codex CLI, claude-mem
-- Claude skills from gstack, Karpathy, Superpowers, and Matt Pocock
+- skills Claude : gstack, Karpathy, Superpowers, Matt Pocock
 - FiraCode Nerd Font Mono
-- Windows Terminal profile and desktop shortcuts
+- profil Windows Terminal et raccourcis Bureau
 
-## Files
+## Fichiers du dépôt
 
-- `bootstrap.ps1`: Windows/Admin PowerShell bootstrap
-- `install.sh`: Linux-side installer, rerunnable inside WSL with `bash ~/install.sh`
+- `bootstrap.ps1` : script Windows à lancer en PowerShell admin
+- `install.sh` : script Linux lancé dans WSL, relançable avec `bash ~/install.sh`

@@ -76,6 +76,23 @@ function Invoke-NativeCaptured {
   return [pscustomobject]@{ ExitCode = $rc; Output = $text }
 }
 
+function Invoke-NativeStreamed {
+  param([scriptblock]$Block)
+  $oldEap = $ErrorActionPreference
+  try {
+    # Stream stdout/stderr line-by-line. Capturing a long WSL install into one
+    # string and printing it later makes PowerShell wrap line breaks badly.
+    $ErrorActionPreference = "Continue"
+    & $Block 2>&1 | ForEach-Object {
+      Write-Host ($_.ToString())
+    }
+    $rc = $LASTEXITCODE
+  } finally {
+    $ErrorActionPreference = $oldEap
+  }
+  return [pscustomobject]@{ ExitCode = $rc }
+}
+
 # ---------- 0. Validate args (Linux username regex; refuses injection chars) ----------
 if ([string]::IsNullOrWhiteSpace($Username)) {
   Die "Could not derive a valid Linux username. Pass -Username <name>."
@@ -143,8 +160,7 @@ if (Test-WslWorks) {
 # ---------- 2. WSL update + default version ----------
 Log "Updating WSL kernel (best-effort)"
 try {
-  $updateResult = Invoke-NativeCaptured { wsl --update --web-download }
-  if ($updateResult.Output) { Write-Host $updateResult.Output }
+  $updateResult = Invoke-NativeStreamed { wsl --update --web-download }
   if ($updateResult.ExitCode -ne 0) { Warn "wsl --update exited $($updateResult.ExitCode) (often fine on locked-down corp machines)" }
 } catch {
   Warn "wsl --update failed (often fine on locked-down corp machines): $_"
@@ -181,8 +197,7 @@ if ($existingUbuntu.Count -gt 0) {
     foreach ($d in $existingUbuntu) {
       Log "Unregistering $d (PERMANENT DELETE)" "Red"
       $null = Invoke-NativeCaptured { wsl --terminate $d }
-      $unregister = Invoke-NativeCaptured { wsl --unregister $d }
-      if ($unregister.Output) { Write-Host $unregister.Output }
+      $unregister = Invoke-NativeStreamed { wsl --unregister $d }
       if ($unregister.ExitCode -ne 0) { Die "wsl --unregister $d failed (exit $($unregister.ExitCode)). Aborting before partial state can cause confusion." }
     }
     Log "Wipe complete. Continuing with clean install of $Distro." "Green"
@@ -199,8 +214,7 @@ if ($existingUbuntu.Count -gt 0) {
 
 if ((Get-InstalledDistros) -notcontains $Distro) {
   Log "Installing $Distro (no launch)"
-  $installResult = Invoke-NativeCaptured { wsl --install -d $Distro --no-launch }
-  if ($installResult.Output) { Write-Host $installResult.Output }
+  $installResult = Invoke-NativeStreamed { wsl --install -d $Distro --no-launch }
   if ($installResult.ExitCode -ne 0) { Die "wsl --install -d $Distro failed (exit $($installResult.ExitCode)). Check the output above; common cause: distro name unsupported on this WSL build. Try 'wsl --list --online' to see valid names." }
 } else {
   Log "$Distro already installed (reusing existing)"
@@ -249,8 +263,7 @@ appendWindowsPath=true
 WSLCONF
 "@
 $bashUser = ConvertTo-LfText $bashUser
-$provision = Invoke-NativeCaptured { wsl -d $Distro -u root -- bash -c $bashUser }
-if ($provision.Output) { Write-Host $provision.Output }
+$provision = Invoke-NativeStreamed { wsl -d $Distro -u root -- bash -c $bashUser }
 if ($provision.ExitCode -ne 0) { Die "User provisioning inside $Distro failed (wsl exit $($provision.ExitCode)). See output above." }
 
 # Belt-and-suspenders: also try the legacy per-distro launcher exe (ubuntu2204.exe,
@@ -269,8 +282,7 @@ if (-not $launcherSet) {
 
 # ---------- 6. Default WSL distro ----------
 Log "Setting $Distro as default WSL distro"
-$setDefault = Invoke-NativeCaptured { wsl --set-default $Distro }
-if ($setDefault.Output) { Write-Host $setDefault.Output }
+$setDefault = Invoke-NativeStreamed { wsl --set-default $Distro }
 if ($setDefault.ExitCode -ne 0) { Die "wsl --set-default $Distro failed (exit $($setDefault.ExitCode))." }
 
 # Terminate so wsl.conf takes effect on next launch
@@ -329,8 +341,7 @@ if ($copyCheck.ExitCode -ne 0) { Die "Copied install.sh is not readable inside W
 
 # ---------- 8. Run install.sh inside Ubuntu as the user ----------
 Log "Running install.sh inside $Distro (packages, zsh, Claude, skills - takes several minutes)"
-$installResult = Invoke-NativeCaptured { wsl -d $Distro -u $Username --cd $linuxHome -- bash -lc "bash ~/install.sh" }
-if ($installResult.Output) { Write-Host $installResult.Output }
+$installResult = Invoke-NativeStreamed { wsl -d $Distro -u $Username --cd $linuxHome -- bash -lc "bash ~/install.sh" }
 $installRc = $installResult.ExitCode
 # install.sh exit convention: 0=ok, 1-99=N skill failures (warn, continue),
 # 100+=fatal (die, abort the rest of bootstrap including the Claude auto-launch).
