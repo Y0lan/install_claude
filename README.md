@@ -53,7 +53,7 @@ If WSL features had to be enabled for the first time, the script will tell you t
 - Installs Ubuntu-22.04 as the default WSL distro
 - Provisions your Linux user with **passwordless sudo** and `systemd` enabled
 - Installs Node LTS, Bun, Google Chrome (real `.deb`, not snap), zsh + oh-my-zsh + Pure prompt, `eza`, ripgrep, fd, fzf, bat, etc.
-- Installs Claude Code (`claude`), OpenAI Codex CLI (`codex`), `claude-mem`, and clones into `~/.claude/skills/`:
+- Installs Claude Code (`claude`), OpenAI Codex CLI (`codex`, aliased as `c`), `claude-mem`, and exposes visible Claude skills in `~/.claude/skills/<skill-name>/SKILL.md` from:
   - [`garrytan/gstack`](https://github.com/garrytan/gstack)
   - [`forrestchang/andrej-karpathy-skills`](https://github.com/forrestchang/andrej-karpathy-skills)
   - [`obra/superpowers`](https://github.com/obra/superpowers)
@@ -89,7 +89,7 @@ bash ~/install.sh --no-skill-setup   # clone skills but do NOT execute their set
 After OAuth completes, double-click the desktop shortcut and paste this one-liner inside zsh:
 
 ```bash
-echo "--- versions ---"; node --version; bun --version; google-chrome --version | head -1; claude --version; codex --version; [ -f ~/.claude-mem/settings.json ] && echo "claude-mem: installed (settings.json present)" || echo "claude-mem: missing"; echo "--- skills ---"; ls -1 ~/.claude/skills/; echo "--- shell ---"; echo "shell: $SHELL"; grep -c '^prompt pure' ~/.zshrc && echo "pure prompt: configured"
+echo "--- versions ---"; node --version; bun --version; google-chrome --version | head -1; claude --version; codex --version; [ -f ~/.claude-mem/settings.json ] && echo "claude-mem: installed (settings.json present)" || echo "claude-mem: missing"; echo "--- visible skills ---"; find ~/.claude/skills -mindepth 2 -maxdepth 2 -name SKILL.md -printf '%h\n' | xargs -r -n1 basename | sort; echo "--- shell ---"; echo "shell: $SHELL"; grep -c '^prompt pure' ~/.zshrc && echo "pure prompt: configured"
 ```
 
 Expected output (versions will differ; the structure is what matters):
@@ -102,11 +102,12 @@ Google Chrome 1xx.x.x.x
 1.x.x (Claude Code)
 0.x.x (Codex CLI)
 claude-mem: installed (settings.json present)
---- skills ---
-andrej-karpathy-skills
+--- visible skills ---
 gstack
-matt-pocock-skills
-superpowers
+karpathy-guidelines
+setup-matt-pocock-skills
+using-superpowers
+...more Matt Pocock and Superpowers skills...
 --- shell ---
 shell: /usr/bin/zsh
 1
@@ -121,7 +122,7 @@ The bootstrap will pause for input three times. None are blocking deadlines:
 2. **claude-mem install** - asks for IDE and LLM provider. Answer `claude-code` and `claude` unless you have a reason not to.
 3. **Claude Code OAuth** at the very end - opens your browser. Sign in, paste the redirect URL back into the terminal if it asks. If you close mid-flow, the next time you open the desktop shortcut zsh will retry.
 
-If any line says "command not found" or a skill is missing, just re-run `bash ~/install.sh` - it picks up where it left off and reports anything that failed in its final summary.
+If any line says "command not found" or a skill is missing, just re-run `bash ~/install.sh` - it picks up where it left off and reports anything that failed in its final summary. Claude Code discovers only directories shaped like `~/.claude/skills/<skill-name>/SKILL.md`, so the installer exposes child skills from bundle repos directly under `~/.claude/skills/`.
 
 ## Shell shortcuts
 

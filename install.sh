@@ -535,11 +535,13 @@ fi
 
 # ---------- 11. Claude skills (~/.claude/skills/) ----------
 log "Setting up ~/.claude/skills/"
-mkdir -p "$HOME/.claude/skills"
+PERSONAL_SKILLS_DIR="$HOME/.claude/skills"
+SKILL_REPO_CACHE="$HOME/.cache/install_claude/skill-repos"
+mkdir -p "$PERSONAL_SKILLS_DIR" "$SKILL_REPO_CACHE"
 
-install_skill() {
+install_gstack() {
   local name="$1" url="$2"
-  local dest="$HOME/.claude/skills/$name"
+  local dest="$PERSONAL_SKILLS_DIR/$name"
   if [ -z "$url" ]; then
     log "  $name: SKIPPED (no repo URL)"
     return 0
@@ -588,16 +590,133 @@ install_skill() {
   fi
 }
 
+clone_or_update_skill_repo() {
+  local name="$1" url="$2" dest="$3"
+  if [ -d "$dest/.git" ]; then
+    if git -C "$dest" rev-parse --verify HEAD >/dev/null 2>&1; then
+      log "  $name: updating cached repo"
+      if ! retry 2 git -C "$dest" pull --ff-only; then
+        log "  $name: WARN - update failed; using cached copy"
+        SKILL_FAILURES+=("$name (git pull failed; used cached copy)")
+      fi
+      return 0
+    fi
+    log "  $name: removing incomplete cached clone"
+    rm -rf "$dest"
+  elif [ -e "$dest" ]; then
+    log "  $name: removing non-git cached path"
+    rm -rf "$dest"
+  fi
+
+  if retry 3 git clone --depth=1 "$url" "$dest"; then
+    log "  $name: cached clone ready"
+    return 0
+  fi
+
+  log "  $name: WARN - clone failed from $url"
+  SKILL_FAILURES+=("$name <- $url (clone failed)")
+  return 1
+}
+
+cleanup_invisible_wrapper_clone() {
+  local name="$1" expected="$2"
+  local dest="$PERSONAL_SKILLS_DIR/$name"
+  local remote=""
+  if [ ! -d "$dest/.git" ] || [ -f "$dest/SKILL.md" ]; then
+    return 0
+  fi
+  remote="$(git -C "$dest" config --get remote.origin.url 2>/dev/null || true)"
+  case "$remote" in
+    *"$expected"*)
+      log "  $name: removing previous invisible wrapper clone from ~/.claude/skills"
+      rm -rf "$dest"
+      ;;
+  esac
+}
+
+install_visible_skill_dir() {
+  local src="$1" source_label="$2"
+  local skill_name dest tmp
+  if [ ! -f "$src/SKILL.md" ]; then
+    return 1
+  fi
+
+  skill_name="$(basename "$src")"
+  dest="$PERSONAL_SKILLS_DIR/$skill_name"
+  tmp="$dest.tmp.$$"
+
+  if [ -e "$dest" ] && [ ! -f "$dest/.claude-bootstrap-managed" ]; then
+    if [ -f "$dest/SKILL.md" ]; then
+      log "  /$skill_name: exists and is not bootstrap-managed; leaving it alone"
+      return 0
+    fi
+    log "  /$skill_name: WARN - path exists but is not a visible skill; skipping"
+    SKILL_FAILURES+=("$skill_name (existing non-skill path at $dest)")
+    return 0
+  fi
+
+  rm -rf "$tmp"
+  mkdir -p "$tmp"
+  if ( cd "$src" && tar --exclude='.git' -cf - . ) | ( cd "$tmp" && tar -xf - ); then
+    {
+      echo "source=$source_label"
+      echo "installed_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    } > "$tmp/.claude-bootstrap-managed"
+    rm -rf "$dest"
+    mv "$tmp" "$dest"
+    log "  /$skill_name: installed"
+  else
+    rm -rf "$tmp"
+    log "  /$skill_name: WARN - copy failed from $src"
+    SKILL_FAILURES+=("$skill_name (copy failed)")
+  fi
+}
+
+install_skill_bundle() {
+  local name="$1" url="$2" expected_remote="$3"
+  local cache="$SKILL_REPO_CACHE/$name"
+  local installed=0 roots=() root skill_md skill_dir
+
+  cleanup_invisible_wrapper_clone "$name" "$expected_remote"
+  if ! clone_or_update_skill_repo "$name" "$url" "$cache"; then
+    return 0
+  fi
+
+  if [ -f "$cache/SKILL.md" ]; then
+    install_visible_skill_dir "$cache" "$name"
+    installed=$((installed + 1))
+  fi
+
+  roots=("$cache/skills" "$cache/.claude/skills")
+  for root in "${roots[@]}"; do
+    if [ ! -d "$root" ]; then
+      continue
+    fi
+    while IFS= read -r -d '' skill_md; do
+      skill_dir="$(dirname "$skill_md")"
+      install_visible_skill_dir "$skill_dir" "$name"
+      installed=$((installed + 1))
+    done < <(find "$root" -mindepth 2 -maxdepth 2 -name SKILL.md -print0 | sort -z)
+  done
+
+  if [ "$installed" -eq 0 ]; then
+    log "  $name: WARN - no visible SKILL.md files found in repo root, skills/, or .claude/skills/"
+    SKILL_FAILURES+=("$name (no visible skills found)")
+  else
+    log "  $name: exposed $installed visible skill(s)"
+  fi
+}
+
 # Canonical repos (verified May 2026 - change if upstream moves):
 GSTACK_REPO="https://github.com/garrytan/gstack.git"
 KARPATHY_REPO="https://github.com/forrestchang/andrej-karpathy-skills.git"
 SUPERPOWERS_REPO="https://github.com/obra/superpowers.git"
 MATT_POCOCK_REPO="https://github.com/mattpocock/skills.git"
 
-install_skill "gstack"                  "$GSTACK_REPO"
-install_skill "andrej-karpathy-skills"  "$KARPATHY_REPO"
-install_skill "superpowers"             "$SUPERPOWERS_REPO"
-install_skill "matt-pocock-skills"      "$MATT_POCOCK_REPO"
+install_gstack       "gstack"                 "$GSTACK_REPO"
+install_skill_bundle "andrej-karpathy-skills" "$KARPATHY_REPO"     "andrej-karpathy-skills"
+install_skill_bundle "superpowers"            "$SUPERPOWERS_REPO"  "obra/superpowers"
+install_skill_bundle "matt-pocock-skills"     "$MATT_POCOCK_REPO"  "mattpocock/skills"
 
 # Alternative install path for superpowers (via Claude Code marketplace, after OAuth):
 #   /plugin install superpowers@claude-plugins-official
