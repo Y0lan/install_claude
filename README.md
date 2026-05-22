@@ -3,7 +3,7 @@
 Installe un environnement de dev complet dans **WSL2 Ubuntu 22.04** :
 Claude Code, Codex, Bun, Node, Chrome, zsh, tmux, des alias utiles et les skills Claude.
 
-Le script peut être relancé sans risque. Si un outil est déjà installé, il saute l’étape.
+Le setup repart volontairement sur un **Ubuntu 22.04 propre**. Les autres Ubuntu WSL sont supprimés, car seule la version 22.04 est supportée ici.
 
 ## Résultat attendu
 
@@ -21,23 +21,11 @@ Ouvrez **PowerShell en tant qu’administrateur**.
 
 Important : ne lancez pas ces commandes dans WSL.
 
-## 2. Installer
+## 2. Installer proprement
 
-### Installation normale
+Cette commande supprime les distributions Ubuntu WSL existantes, puis recrée un `Ubuntu-22.04` propre.
 
-À utiliser dans la plupart des cas.
-
-Cette commande garde le Ubuntu existant s’il y en a un, et ajoute ce qui manque.
-
-```powershell
-Remove-Item -Recurse -Force "$env:TEMP\install_claude" -ErrorAction SilentlyContinue; git clone https://github.com/Y0lan/install_claude "$env:TEMP\install_claude"; cd "$env:TEMP\install_claude"; Set-ExecutionPolicy -Scope Process Bypass -Force; .\bootstrap.ps1
-```
-
-### Installation propre depuis zéro
-
-À utiliser seulement si vous voulez supprimer Ubuntu et repartir de zéro.
-
-Attention : cette commande supprime définitivement les distributions Ubuntu WSL existantes, y compris tous les fichiers Linux dedans.
+Attention : tous les fichiers Linux dans les Ubuntu WSL supprimés seront perdus.
 
 ```powershell
 Remove-Item -Recurse -Force "$env:TEMP\install_claude" -ErrorAction SilentlyContinue; git clone https://github.com/Y0lan/install_claude "$env:TEMP\install_claude"; cd "$env:TEMP\install_claude"; Set-ExecutionPolicy -Scope Process Bypass -Force; .\bootstrap.ps1 -CleanInstall
@@ -49,13 +37,15 @@ Si le script active WSL et demande de redémarrer :
 
 1. Redémarrez Windows.
 2. Rouvrez **PowerShell en administrateur**.
-3. Lancez :
+3. Lancez la reprise :
 
 ```powershell
 cd "$env:TEMP\install_claude"; git pull; Set-ExecutionPolicy -Scope Process Bypass -Force; .\bootstrap.ps1
 ```
 
-## 4. Si une installation échoue au milieu
+Ne relancez pas `-CleanInstall` après le reboot, sinon Ubuntu sera supprimé une deuxième fois.
+
+## 4. Si l’installation échoue au milieu
 
 Relancez simplement :
 
@@ -74,7 +64,7 @@ cd "$env:TEMP\install_claude"; git fetch origin; git reset --hard origin/main; S
 Vous pouvez voir quelques prompts :
 
 - `gstack` : appuyez sur Entrée, le choix par défaut est OK.
-- `claude-mem` : choisissez `claude-code` pour l’IDE, puis `claude` pour le provider.
+- `claude-mem` : choisissez `Claude Code` et `Codex` pour le harness, puis `Claude Code` pour le provider.
 - OAuth Claude : connectez-vous dans le navigateur quand Claude s’ouvre.
 
 ## 6. Utiliser l’environnement
@@ -96,6 +86,8 @@ Pour les skills Matt Pocock, lancez ensuite :
 ```text
 /setup-matt-pocock-skills
 ```
+
+Cette étape vient du quickstart officiel de `mattpocock/skills` : elle configure le repo avant d’utiliser les autres skills Matt Pocock.
 
 ## 7. Vérifier rapidement
 

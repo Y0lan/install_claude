@@ -64,7 +64,7 @@ log "User: $USER_NAME - home: $HOME - skip-skill-setup: $SKIP_SKILL_SETUP"
 log "Expect 10-30 min total (apt updates, npm globals, gstack runs playwright install ~300MB)."
 log "A few steps will pause for input - that's intentional:"
 log "  - gstack/setup asks about skill name prefix (10s timeout, default is fine)"
-log "  - npx claude-mem install asks for IDE + LLM provider (Claude Code + claude is the usual answer)"
+log "  - npx claude-mem install: pick Claude Code + Codex for harness, then Claude Code for provider"
 log "  - claude OAuth at the very end (browser-based, no typing)"
 log "Answer at your own pace - nothing is on a hard deadline."
 
@@ -557,8 +557,9 @@ fi
 # Upstream docs explicitly say: DO NOT 'npm install -g claude-mem' - that only
 # drops the SDK without registering the Claude Code hooks or starting the worker.
 # `npx claude-mem install` is the canonical installer; it's interactive and asks
-# for IDE + LLM provider. Defaults: ide=claude-code, provider=claude.
-log "Installing claude-mem (will ask for IDE + provider - pick 'claude-code' and 'claude' if unsure)"
+# for harness + provider. For this setup: Claude Code + Codex for harness,
+# then Claude Code for provider.
+log "Installing claude-mem (pick Claude Code + Codex for harness, then Claude Code for provider)"
 if [ ! -d "$HOME/.claude/plugins/marketplaces/thedotmack" ] && [ ! -f "$HOME/.claude-mem/settings.json" ]; then
   if ! npx --yes claude-mem@latest install; then
     log "WARN: claude-mem install exited non-zero - run 'npx claude-mem install' manually"
