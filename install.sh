@@ -35,7 +35,11 @@ fi
 USER_NAME="$(whoami)"
 log "User: $USER_NAME — home: $HOME — skip-skill-setup: $SKIP_SKILL_SETUP"
 log "Expect 10-30 min total (apt updates, npm globals, gstack runs playwright install ~300MB)."
-log "No interactive prompts. gstack may ask one question with a 10s timeout — we pass -q to skip it."
+log "A few steps will pause for input — that's intentional:"
+log "  - gstack/setup asks about skill name prefix (10s timeout, default is fine)"
+log "  - npx claude-mem install asks for IDE + LLM provider (Claude Code + claude is the usual answer)"
+log "  - claude OAuth at the very end (browser-based, no typing)"
+log "Answer at your own pace — nothing is on a hard deadline."
 
 # Accumulator for skill-clone failures (reported at end, doesn't abort the script)
 declare -a SKILL_FAILURES=()
@@ -303,10 +307,16 @@ if ! have claude; then
   fi
 fi
 
-# ---------- 9. claude-mem ----------
-log "Installing claude-mem"
-if ! have claude-mem; then
-  npm install -g claude-mem || log "WARN: claude-mem install failed — try 'npm i -g claude-mem' later"
+# ---------- 9. claude-mem (proper plugin install, not just the npm package) ----------
+# Upstream docs explicitly say: DO NOT 'npm install -g claude-mem' — that only
+# drops the SDK without registering the Claude Code hooks or starting the worker.
+# `npx claude-mem install` is the canonical installer; it's interactive and asks
+# for IDE + LLM provider. Defaults: ide=claude-code, provider=claude.
+log "Installing claude-mem (will ask for IDE + provider — pick 'claude-code' and 'claude' if unsure)"
+if [ ! -d "$HOME/.claude/plugins/marketplaces/thedotmack" ] && [ ! -f "$HOME/.claude-mem/settings.json" ]; then
+  npx --yes claude-mem@latest install || log "WARN: claude-mem install exited non-zero — run 'npx claude-mem install' manually"
+else
+  log "claude-mem already installed (settings dir present); skipping"
 fi
 
 # ---------- 10. Claude skills (~/.claude/skills/) ----------
@@ -340,14 +350,9 @@ install_skill() {
       # Run upstream setup/install scripts if present.
       # SECURITY: this executes code from the cloned repo. You opted in by
       # listing the URL above. Run with --no-skill-setup to disable.
-      # gstack/setup has a 10s-timeout prompt about skill name prefix; -q skips it
-      # and picks the default. Other upstream setups don't have known prompts.
-      local setup_args=()
-      [ "$name" = "gstack" ] && setup_args=("-q")
-
       if [ -x "$dest/setup" ]; then
-        log "  $name: running ./setup ${setup_args[*]}"
-        if ! ( cd "$dest" && ./setup "${setup_args[@]}" ); then
+        log "  $name: running ./setup (interactive — answer prompts or wait for timeout)"
+        if ! ( cd "$dest" && ./setup ); then
           log "  $name: WARN setup exited non-zero"
           SKILL_FAILURES+=("$name (setup script failed)")
         fi
@@ -405,7 +410,7 @@ echo "  Node:       $(node --version 2>/dev/null || echo 'missing')"
 echo "  Bun:        $(bun --version 2>/dev/null || echo 'missing')"
 echo "  Chrome:     $(google-chrome --version 2>/dev/null || echo 'missing')"
 echo "  Claude:     $(claude --version 2>/dev/null || echo 'missing')"
-echo "  claude-mem: $(claude-mem --version 2>/dev/null || echo 'missing')"
+echo "  claude-mem: $(npx --yes claude-mem@latest version 2>/dev/null | tail -1 || echo 'missing')"
 echo ""
 
 if [ "${#SKILL_FAILURES[@]}" -gt 0 ]; then

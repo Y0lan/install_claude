@@ -56,7 +56,7 @@ bash ~/install.sh --no-skill-setup   # clone skills but do NOT execute their set
 After OAuth completes, double-click the desktop shortcut and paste this one-liner inside zsh:
 
 ```bash
-echo "--- versions ---"; node --version; bun --version; google-chrome --version | head -1; claude --version; claude-mem --version 2>/dev/null || echo "claude-mem: missing"; echo "--- skills ---"; ls -1 ~/.claude/skills/; echo "--- shell ---"; echo "shell: $SHELL"; grep -c '^prompt pure' ~/.zshrc && echo "pure prompt: configured"
+echo "--- versions ---"; node --version; bun --version; google-chrome --version | head -1; claude --version; [ -f ~/.claude-mem/settings.json ] && echo "claude-mem: installed (settings.json present)" || echo "claude-mem: missing"; echo "--- skills ---"; ls -1 ~/.claude/skills/; echo "--- shell ---"; echo "shell: $SHELL"; grep -c '^prompt pure' ~/.zshrc && echo "pure prompt: configured"
 ```
 
 Expected output (versions will differ; the structure is what matters):
@@ -67,7 +67,7 @@ v22.x.x
 1.x.x
 Google Chrome 1xx.x.x.x
 1.x.x (Claude Code)
-0.x.x
+claude-mem: installed (settings.json present)
 --- skills ---
 andrej-karpathy-skills
 gstack
@@ -78,6 +78,14 @@ shell: /usr/bin/zsh
 1
 pure prompt: configured
 ```
+
+## A few prompts you'll see during install (and what to answer)
+
+The bootstrap will pause for input three times. None are blocking deadlines:
+
+1. **gstack skill prefix** (10s timeout, default works) — chooses whether gstack skills surface as `/skill-name` or `/gstack-*`. Pick whichever you prefer.
+2. **claude-mem install** — asks for IDE and LLM provider. Answer `claude-code` and `claude` unless you have a reason not to.
+3. **Claude Code OAuth** at the very end — opens your browser. Sign in, paste the redirect URL back into the terminal if it asks. If you close mid-flow, the next time you open the desktop shortcut zsh will retry.
 
 If any line says "command not found" or a skill is missing, just re-run `bash ~/install.sh` — it picks up where it left off and reports anything that failed in its final summary.
 
