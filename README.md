@@ -22,6 +22,20 @@ Pulls the latest version of the scripts and re-runs from the existing clone. Eve
 cd "$env:TEMP\install_claude"; git pull; Set-ExecutionPolicy -Scope Process Bypass -Force; .\bootstrap.ps1
 ```
 
+### Force-update and try again
+
+Use this if a previous run failed and you want the newest update before each retry. It overwrites local changes inside the temp clone, then re-runs the idempotent bootstrap. Paste the same line again after any recoverable failure:
+
+```powershell
+cd "$env:TEMP\install_claude"; git fetch origin; git reset --hard origin/main; Set-ExecutionPolicy -Scope Process Bypass -Force; .\bootstrap.ps1
+```
+
+If you used a custom Linux username, keep passing it on every retry:
+
+```powershell
+cd "$env:TEMP\install_claude"; git fetch origin; git reset --hard origin/main; Set-ExecutionPolicy -Scope Process Bypass -Force; .\bootstrap.ps1 -Username nicolenguon
+```
+
 ### Nuke and start over (clean re-clone)
 
 If you suspect the local clone is in a weird state and you want a guaranteed fresh start:
