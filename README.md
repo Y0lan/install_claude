@@ -106,3 +106,9 @@ Autres alias WSL : `c` (codex), `claude-login`, `t` (tmux), `gst` / `gp` / `gP` 
 - Karpathy = règles strictes de raisonnement
 - Matt Pocock = TS / PRD / issues
 - Claude **et** Codex doivent être loggés pour qu’ils collaborent.
+
+---
+
+🚀 **Vos launchers sont sur le Bureau Windows !**
+- **`Ubuntu-22.04 (zsh).lnk`** → terminal WSL (lancez `cx` dedans)
+- **`Claude Code (auto).lnk`** → Claude direct en mode auto
