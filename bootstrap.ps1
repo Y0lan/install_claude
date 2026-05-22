@@ -342,30 +342,35 @@ if ($installRc -gt 0) {
 }
 
 # ---------- 9. FiraCode Nerd Font (ligatures!) ----------
-Log "Installing FiraCode Nerd Font (ligatures included)"
+Log "Checking FiraCode Nerd Font (ligatures included)"
 try {
-  $fontDir = Join-Path $env:TEMP "FiraCodeNF"
-  $fontZip = "$fontDir.zip"
-  if (-not (Test-Path $fontDir)) {
-    Invoke-WebRequest -Uri "https://github.com/ryanoasis/nerd-fonts/releases/latest/download/FiraCode.zip" `
-                      -OutFile $fontZip -UseBasicParsing
-    Expand-Archive -Force $fontZip $fontDir
-    Remove-Item $fontZip -ErrorAction SilentlyContinue
-  }
-  $shellApp = New-Object -ComObject Shell.Application
-  $fontsFolder = $shellApp.Namespace(0x14)
-  if (-not $fontsFolder) { throw "Could not open Windows Fonts shell namespace" }
-  $installedCount = 0
-  Get-ChildItem $fontDir -Filter "*.ttf" -File | ForEach-Object {
-    $already = Test-Path (Join-Path "$env:WINDIR\Fonts" $_.Name)
-    if (-not $already) {
-      $fontsFolder.CopyHere($_.FullName, 0x10)  # 0x10 = no-confirm
-      $installedCount++
+  $existingNerdMono = @(Get-ChildItem "$env:WINDIR\Fonts" -Filter "FiraCode*Nerd*Mono*.ttf" -File -ErrorAction SilentlyContinue)
+  if ($existingNerdMono.Count -gt 0) {
+    Write-Host "    FiraCode Nerd Font Mono already installed; skipping download"
+  } else {
+    $fontDir = Join-Path $env:TEMP "FiraCodeNF"
+    $fontZip = "$fontDir.zip"
+    if (-not (Test-Path $fontDir)) {
+      Invoke-WebRequest -Uri "https://github.com/ryanoasis/nerd-fonts/releases/latest/download/FiraCode.zip" `
+                        -OutFile $fontZip -UseBasicParsing
+      Expand-Archive -Force $fontZip $fontDir
+      Remove-Item $fontZip -ErrorAction SilentlyContinue
     }
+    $shellApp = New-Object -ComObject Shell.Application
+    $fontsFolder = $shellApp.Namespace(0x14)
+    if (-not $fontsFolder) { throw "Could not open Windows Fonts shell namespace" }
+    $installedCount = 0
+    Get-ChildItem $fontDir -Filter "*.ttf" -File | ForEach-Object {
+      $already = Test-Path (Join-Path "$env:WINDIR\Fonts" $_.Name)
+      if (-not $already) {
+        $fontsFolder.CopyHere($_.FullName, 0x10)  # 0x10 = no-confirm
+        $installedCount++
+      }
+    }
+    Write-Host "    Installed $installedCount new font file(s)"
+    # Give the COM font installer a moment to actually register the fonts before WT reads them
+    if ($installedCount -gt 0) { Start-Sleep -Seconds 3 }
   }
-  Write-Host "    Installed $installedCount new font file(s)"
-  # Give the COM font installer a moment to actually register the fonts before WT reads them
-  if ($installedCount -gt 0) { Start-Sleep -Seconds 3 }
 } catch {
   Warn "FiraCode Nerd Font install failed/skipped: $_"
 }

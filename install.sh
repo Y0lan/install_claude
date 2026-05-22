@@ -23,6 +23,13 @@ done
 # ---------- helpers ----------
 log() { printf '\033[1;36m[%(%H:%M:%S)T]\033[0m %s\n' -1 "$*"; }
 have() { command -v "$1" >/dev/null 2>&1; }
+have_deb() { dpkg-query -W -f='${Status}' "$1" 2>/dev/null | grep -q 'install ok installed'; }
+missing_debs() {
+  local pkg
+  for pkg in "$@"; do
+    have_deb "$pkg" || printf '%s\n' "$pkg"
+  done
+}
 retry() {
   local tries="$1"; shift
   local delay=2
@@ -73,13 +80,11 @@ if ! sudo test -f "$SUDOERS_FILE"; then
 fi
 
 # ---------- 2. apt base packages ----------
-log "apt update + base packages"
+log "Checking apt base packages"
 # Dpkg options applied to EVERY apt-get install/upgrade so maintainer-conflict
 # prompts ("keep current config? use new?") never surface and hang reruns.
 APT_OPTS=(-o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-confdef")
-retry 3 sudo DEBIAN_FRONTEND=noninteractive apt-get update -y
-retry 3 sudo DEBIAN_FRONTEND=noninteractive apt-get upgrade -y "${APT_OPTS[@]}"
-retry 3 sudo DEBIAN_FRONTEND=noninteractive apt-get install -y "${APT_OPTS[@]}" \
+APT_PACKAGES=(
   curl wget ca-certificates gnupg lsb-release \
   git build-essential pkg-config \
   zsh unzip zip tar \
@@ -91,6 +96,15 @@ retry 3 sudo DEBIAN_FRONTEND=noninteractive apt-get install -y "${APT_OPTS[@]}" 
   libnss3 libatk1.0-0 libatk-bridge2.0-0 libcups2 libdrm2 \
   libxkbcommon0 libxcomposite1 libxdamage1 libxfixes3 libxrandr2 \
   libgbm1 libpango-1.0-0 libcairo2 libasound2
+)
+mapfile -t MISSING_APT_PACKAGES < <(missing_debs "${APT_PACKAGES[@]}")
+if [ "${#MISSING_APT_PACKAGES[@]}" -gt 0 ]; then
+  log "Installing missing apt package(s): ${MISSING_APT_PACKAGES[*]}"
+  retry 3 sudo DEBIAN_FRONTEND=noninteractive apt-get update -y
+  retry 3 sudo DEBIAN_FRONTEND=noninteractive apt-get install -y "${APT_OPTS[@]}" "${MISSING_APT_PACKAGES[@]}"
+else
+  log "Base apt packages already installed; skipping apt update/install"
+fi
 
 # fd-find ships as `fdfind` on Ubuntu - symlink to fd
 mkdir -p "$HOME/.local/bin"
@@ -104,7 +118,10 @@ fi
 export PATH="$HOME/.local/bin:$PATH"
 
 install_eza_if_needed() {
-  if have eza; then return 0; fi
+  if have eza; then
+    log "eza already installed; skipping"
+    return 0
+  fi
 
   log "Installing eza"
   if retry 2 sudo DEBIAN_FRONTEND=noninteractive apt-get install -y "${APT_OPTS[@]}" eza; then
@@ -135,7 +152,7 @@ install_eza_if_needed() {
 install_eza_if_needed || true
 
 # ---------- 3. Google Chrome .deb (real .deb - snap chromium is broken in WSL) ----------
-log "Installing Google Chrome (real .deb; snap chromium doesn't work in WSL)"
+log "Checking Google Chrome (real .deb; snap chromium doesn't work in WSL)"
 if ! have google-chrome; then
   TMPDEB="$(mktemp --suffix=.deb)"
   if ! retry 3 wget -qO "$TMPDEB" https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb; then
@@ -149,6 +166,8 @@ if ! have google-chrome; then
     exit 100
   fi
   rm -f "$TMPDEB"
+else
+  log "Google Chrome already installed; skipping download"
 fi
 # Convenience symlink: `chromium` resolves to Chrome. Note: this is Chrome with
 # a chromium-named symlink, NOT actual Chromium-browser. Most tools that want
@@ -158,7 +177,7 @@ if ! have chromium && have google-chrome; then
 fi
 
 # ---------- 4. Node.js (NodeSource LTS) ----------
-log "Installing Node.js LTS"
+log "Checking Node.js LTS"
 if ! have node || ! node --version 2>/dev/null | grep -qE '^v(20|22|24)\.'; then
   NODESOURCE_SETUP="$(mktemp)"
   if ! retry 3 curl -fsSL -o "$NODESOURCE_SETUP" https://deb.nodesource.com/setup_lts.x; then
@@ -176,6 +195,8 @@ if ! have node || ! node --version 2>/dev/null | grep -qE '^v(20|22|24)\.'; then
     echo "FATAL: Node.js install failed. Re-run install.sh to retry." >&2
     exit 100
   fi
+else
+  log "Node.js already installed; skipping NodeSource download"
 fi
 # Sanity-check npm exists before we touch its config (NodeSource ships npm with nodejs)
 if ! have npm; then
@@ -184,13 +205,17 @@ if ! have npm; then
 fi
 
 # user-local npm prefix so `npm i -g` doesn't need sudo
-log "Configuring npm user-global prefix at ~/.npm-global"
 mkdir -p "$HOME/.npm-global"
-npm config set prefix "$HOME/.npm-global"
+if [ "$(npm config get prefix 2>/dev/null || true)" != "$HOME/.npm-global" ]; then
+  log "Configuring npm user-global prefix at ~/.npm-global"
+  npm config set prefix "$HOME/.npm-global"
+else
+  log "npm user-global prefix already configured; skipping"
+fi
 export PATH="$HOME/.npm-global/bin:$PATH"
 
 # ---------- 5. Bun ----------
-log "Installing Bun"
+log "Checking Bun"
 if ! have bun; then
   BUN_INSTALLER="$(mktemp)"
   if ! retry 3 curl -fsSL -o "$BUN_INSTALLER" https://bun.sh/install; then
@@ -204,6 +229,8 @@ if ! have bun; then
     exit 100
   fi
   rm -f "$BUN_INSTALLER"
+else
+  log "Bun already installed; skipping download"
 fi
 export PATH="$HOME/.bun/bin:$PATH"
 
@@ -247,6 +274,8 @@ if [ ! -f "$HOME/.oh-my-zsh/oh-my-zsh.sh" ]; then
       exit 100
     }
   rm -f "$OMZ_INSTALLER"
+else
+  log "oh-my-zsh already installed; skipping download"
 fi
 
 # zsh plugins
@@ -256,6 +285,8 @@ clone_if_needed() {
   if [ ! -f "$dest/$sentinel" ]; then
     [ -d "$dest" ] && rm -rf "$dest"
     retry 3 git clone --depth=1 "$repo" "$dest"
+  else
+    log "$(basename "$dest") already installed; skipping clone"
   fi
 }
 clone_if_needed https://github.com/zsh-users/zsh-autosuggestions       "$ZSH_CUSTOM/plugins/zsh-autosuggestions"       "zsh-autosuggestions.zsh"
@@ -501,21 +532,25 @@ fi
 rm -f "$MANAGED_TMP"
 
 # ---------- 8. Claude Code ----------
-log "Installing Claude Code (@anthropic-ai/claude-code)"
+log "Checking Claude Code (@anthropic-ai/claude-code)"
 if ! have claude; then
   if ! retry 2 npm install -g @anthropic-ai/claude-code; then
     echo "FATAL: claude-code install failed. Try: npm i -g @anthropic-ai/claude-code" >&2
     exit 100
   fi
+else
+  log "Claude Code already installed; skipping npm install"
 fi
 
 # ---------- 9. OpenAI Codex CLI ----------
-log "Installing OpenAI Codex CLI (@openai/codex)"
+log "Checking OpenAI Codex CLI (@openai/codex)"
 if ! have codex; then
   if ! retry 2 npm install -g @openai/codex; then
     echo "FATAL: codex install failed. Try: npm i -g @openai/codex" >&2
     exit 100
   fi
+else
+  log "Codex already installed; skipping npm install"
 fi
 
 # ---------- 10. claude-mem (proper plugin install, not just the npm package) ----------
@@ -594,11 +629,7 @@ clone_or_update_skill_repo() {
   local name="$1" url="$2" dest="$3"
   if [ -d "$dest/.git" ]; then
     if git -C "$dest" rev-parse --verify HEAD >/dev/null 2>&1; then
-      log "  $name: updating cached repo"
-      if ! retry 2 git -C "$dest" pull --ff-only; then
-        log "  $name: WARN - update failed; using cached copy"
-        SKILL_FAILURES+=("$name (git pull failed; used cached copy)")
-      fi
+      log "  $name: cached repo already present; skipping git pull"
       return 0
     fi
     log "  $name: removing incomplete cached clone"
@@ -645,8 +676,11 @@ install_visible_skill_dir() {
   dest="$PERSONAL_SKILLS_DIR/$skill_name"
   tmp="$dest.tmp.$$"
 
-  if [ -e "$dest" ] && [ ! -f "$dest/.claude-bootstrap-managed" ]; then
-    if [ -f "$dest/SKILL.md" ]; then
+  if [ -e "$dest" ]; then
+    if [ -f "$dest/.claude-bootstrap-managed" ] && [ -f "$dest/SKILL.md" ]; then
+      log "  /$skill_name: already installed; skipping copy"
+      return 0
+    elif [ -f "$dest/SKILL.md" ]; then
       log "  /$skill_name: exists and is not bootstrap-managed; leaving it alone"
       return 0
     fi
@@ -748,7 +782,11 @@ echo "  Bun:        $(bun --version 2>/dev/null || echo 'missing')"
 echo "  Chrome:     $(google-chrome --version 2>/dev/null || echo 'missing')"
 echo "  Claude:     $(claude --version 2>/dev/null || echo 'missing')"
 echo "  Codex:      $(codex --version 2>/dev/null || echo 'missing')"
-echo "  claude-mem: $(npx --yes claude-mem@latest version 2>/dev/null | tail -1 || echo 'missing')"
+if [ -f "$HOME/.claude-mem/settings.json" ] || [ -d "$HOME/.claude/plugins/marketplaces/thedotmack" ]; then
+  echo "  claude-mem: installed"
+else
+  echo "  claude-mem: missing"
+fi
 echo ""
 
 if [ "${#SKILL_FAILURES[@]}" -gt 0 ]; then
