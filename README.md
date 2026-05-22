@@ -81,13 +81,13 @@ Dans Claude, vérifiez les skills avec :
 /skills
 ```
 
-Pour les skills Matt Pocock, lancez ensuite :
+Pour les skills Matt Pocock, lancez ensuite cette commande **dans le repo du projet à configurer** :
 
 ```text
 /setup-matt-pocock-skills
 ```
 
-Cette étape vient du quickstart officiel de `mattpocock/skills` : elle configure le repo avant d’utiliser les autres skills Matt Pocock.
+Cette étape vient du quickstart officiel de `mattpocock/skills`. Elle n’est pas lancée automatiquement parce qu’elle configure le repo courant (`AGENTS.md` ou `CLAUDE.md`, tracker, labels, docs). Il faut donc la lancer une fois par projet.
 
 ## 7. Vérifier rapidement
 
