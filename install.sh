@@ -273,20 +273,76 @@ SAVEHIST=50000
 HISTFILE=~/.zsh_history
 setopt SHARE_HISTORY HIST_IGNORE_DUPS HIST_IGNORE_SPACE
 
-# ===== aliases =====
-alias ll='ls -lah --color=auto'
-alias la='ls -A --color=auto'
-alias gs='git status'
-alias gd='git diff'
-alias gl='git log --oneline --graph --decorate -20'
+# ===== navigation =====
+if command -v zoxide >/dev/null 2>&1; then
+  eval "$(zoxide init zsh)"
+fi
+zd() {
+  if (( $# == 0 )); then
+    builtin cd ~ || return
+  elif [[ -d $1 ]]; then
+    builtin cd "$1" || return
+  elif command -v z >/dev/null 2>&1; then
+    z "$@"
+  else
+    builtin cd "$@"
+  fi
+}
+alias cd='zd'
 alias ..='cd ..'
 alias ...='cd ../..'
-alias c='codex'
+alias ....='cd ../../..'
+
+# ===== listing =====
+alias l='eza --icons=auto'
+alias ls='eza -lh --group-directories-first --icons=auto'
+alias ll='eza -lh --group-directories-first --icons=auto'
+alias la='eza -lha --group-directories-first --icons=auto'
+alias lsa='ls -a'
+alias lt='eza --tree --level=2 --long --icons --git'
+alias lta='lt -a'
+
+# ===== AI / Omarchy-style =====
+alias c='opencode'
 alias cx='printf "\033[2J\033[3J\033[H" && claude --permission-mode bypassPermissions'
 alias t='tmux attach || tmux new -s Work'
 alias ic='tdl c'
 alias ix='tdl cx'
 alias icx='tdl c cx'
+
+# ===== git =====
+alias g='git'
+alias gst='git status'
+alias gco='git checkout'
+alias gp='git pull'
+alias gP='git push'
+alias gcm='git commit -m'
+alias gcam='git commit -a -m'
+alias gcad='git commit -a --amend'
+alias glog='git log --oneline --graph --decorate -20'
+
+# ===== Kubernetes =====
+alias k='kubectl'
+alias kx='kubectx'
+alias kn='kubens'
+
+# ===== tools / utils =====
+alias d='docker'
+alias r='rails'
+alias ff="fzf --preview 'bat --style=numbers --color=always {}'"
+alias eff='$EDITOR "$(ff)"'
+alias decompress='tar -xzf'
+alias reload='source ~/.bashrc'
+alias claude-mem='bun worker-service.cjs'
+please() {
+  local last_cmd
+  last_cmd="$(fc -ln -1)"
+  print -r -- "sudo $last_cmd"
+  eval "sudo $last_cmd"
+}
+path() {
+  print -l ${(s.:.)PATH}
+}
 
 # Omarchy-style tmux AI layout: editor on the left, agent pane(s) on the right.
 tdl() {

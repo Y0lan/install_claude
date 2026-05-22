@@ -209,11 +209,16 @@ if ! id -u '$Username' >/dev/null 2>&1; then
 fi
 echo '$Username ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/99-$Username-nopasswd
 chmod 0440 /etc/sudoers.d/99-$Username-nopasswd
+mkdir -p /usr/lib/binfmt.d
+printf ':WSLInterop:M::MZ::/init:PF\n' > /usr/lib/binfmt.d/WSLInterop.conf
 cat > /etc/wsl.conf <<'WSLCONF'
 [user]
 default=$Username
 [boot]
 systemd=true
+[interop]
+enabled=true
+appendWindowsPath=true
 WSLCONF
 "@
 $bashUser = ConvertTo-LfText $bashUser
@@ -423,6 +428,21 @@ $sc.IconLocation     = "wsl.exe,0"
 $sc.Description      = "Open $Distro in zsh, in home dir"
 $sc.Save()
 
+$claudeShortcut = Join-Path $desktop "Claude Code (auto).lnk"
+$claudeSc = $wsh.CreateShortcut($claudeShortcut)
+$claudeCommand = "claude --permission-mode bypassPermissions"
+if ($wt) {
+  $claudeSc.TargetPath = $wt.Source
+  $claudeSc.Arguments  = "new-tab --title `"Claude Code Auto`" wsl.exe -d `"$Distro`" --cd $linuxHome -- zsh -ic `"$claudeCommand`""
+} else {
+  $claudeSc.TargetPath = "wsl.exe"
+  $claudeSc.Arguments  = "-d `"$Distro`" --cd $linuxHome -- zsh -ic `"$claudeCommand`""
+}
+$claudeSc.WorkingDirectory = $env:USERPROFILE
+$claudeSc.IconLocation     = "wsl.exe,0"
+$claudeSc.Description      = "Open Claude Code in $Distro with bypass permissions"
+$claudeSc.Save()
+
 # ---------- 12. Launch first session -> lands in claude OAuth ----------
 Log "Opening a fresh terminal - zsh will launch Claude Code for OAuth automatically" "Green"
 Start-Sleep -Seconds 1
@@ -435,6 +455,7 @@ if ($wt) {
 Log "DONE." "Green"
 Write-Host ""
 Write-Host "  Desktop shortcut: $shortcut" -ForegroundColor Green
+Write-Host "  Claude auto:      $claudeShortcut" -ForegroundColor Green
 Write-Host "  Linux user:       $Username  (passwordless sudo, empty password)" -ForegroundColor Green
 Write-Host "  Default distro:   $Distro" -ForegroundColor Green
 if (-not $wtPatched -and $wtSettings -and (Test-Path $wtSettings)) {
@@ -442,4 +463,5 @@ if (-not $wtPatched -and $wtSettings -and (Test-Path $wtSettings)) {
 }
 Write-Host ""
 Write-Host "  If Claude Code doesn't auto-launch, open the shortcut and run: claude" -ForegroundColor Yellow
+Write-Host "  To launch Claude in bypass mode later, open: $claudeShortcut" -ForegroundColor Yellow
 Write-Host ""

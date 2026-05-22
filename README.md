@@ -61,6 +61,7 @@ If WSL features had to be enabled for the first time, the script will tell you t
 - Installs **FiraCode Nerd Font Mono** (ligatures, single-cell glyphs - clean Powerline alignment)
 - Patches Windows Terminal: default font, default profile points at Ubuntu-22.04, opens in `~` with `zsh -l`
 - Creates a Desktop shortcut `Ubuntu-22.04 (zsh).lnk`
+- Creates a Desktop shortcut `Claude Code (auto).lnk` that opens WSL and launches `claude --permission-mode bypassPermissions`
 - Opens a fresh terminal at the end -> first-run hook auto-launches `claude` for OAuth
 
 ## Options
@@ -124,15 +125,58 @@ If any line says "command not found" or a skill is missing, just re-run `bash ~/
 
 ## Shell shortcuts
 
-The managed zsh block includes Omarchy-style AI shortcuts:
+The managed zsh block includes these aliases and helpers:
 
 ```bash
-c     # codex
-cx    # claude --permission-mode bypassPermissions
-t     # attach tmux or create Work session
-ic    # tmux layout with codex
-ix    # tmux layout with cx
-icx   # tmux layout with codex + cx
+# AI / Omarchy-style
+c     # opencode
+cx    # clear screen, then claude --permission-mode bypassPermissions
+ic    # tdl c
+ix    # tdl cx
+icx   # tdl c cx
+t     # tmux attach || tmux new -s Work
+
+# Navigation
+..    # cd ..
+...   # cd ../..
+....  # cd ../../..
+cd    # zd, with zoxide support when zoxide is installed
+
+# Listing
+l     # eza --icons=auto
+ls    # eza -lh --group-directories-first --icons=auto
+ll    # eza -lh --group-directories-first --icons=auto
+la    # eza -lha --group-directories-first --icons=auto
+lsa   # ls -a
+lt    # eza --tree --level=2 --long --icons --git
+lta   # lt -a
+
+# Git
+g     # git
+gst   # git status
+gco   # git checkout
+gp    # git pull
+gP    # git push
+gcm   # git commit -m
+gcam  # git commit -a -m
+gcad  # git commit -a --amend
+glog  # git log --oneline --graph --decorate -20
+
+# Kubernetes
+k     # kubectl
+kx    # kubectx
+kn    # kubens
+
+# Tools / utils
+d          # docker
+r          # rails
+ff         # fzf with bat preview
+eff        # edit fzf-selected file
+decompress # tar -xzf
+please     # re-run last command with sudo
+path       # print PATH line by line
+reload     # source ~/.bashrc
+claude-mem # bun worker-service.cjs
 ```
 
 ## What's in the repo
