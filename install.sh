@@ -54,9 +54,12 @@ fi
 
 # ---------- 2. apt base packages ----------
 log "apt update + base packages"
+# Dpkg options applied to EVERY apt-get install/upgrade so maintainer-conflict
+# prompts ("keep current config? use new?") never surface and hang reruns.
+APT_OPTS=(-o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-confdef")
 sudo DEBIAN_FRONTEND=noninteractive apt-get update -y
-sudo DEBIAN_FRONTEND=noninteractive apt-get upgrade -y -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-confdef"
-sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
+sudo DEBIAN_FRONTEND=noninteractive apt-get upgrade -y "${APT_OPTS[@]}"
+sudo DEBIAN_FRONTEND=noninteractive apt-get install -y "${APT_OPTS[@]}" \
   curl wget ca-certificates gnupg lsb-release \
   git build-essential pkg-config \
   zsh unzip zip tar \
@@ -85,7 +88,7 @@ log "Installing Google Chrome (real .deb; snap chromium doesn't work in WSL)"
 if ! have google-chrome; then
   TMPDEB="$(mktemp --suffix=.deb)"
   wget -qO "$TMPDEB" https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
-  sudo DEBIAN_FRONTEND=noninteractive apt-get install -y "$TMPDEB"
+  sudo DEBIAN_FRONTEND=noninteractive apt-get install -y "${APT_OPTS[@]}" "$TMPDEB"
   rm -f "$TMPDEB"
 fi
 # Convenience symlink: `chromium` resolves to Chrome. Note: this is Chrome with
@@ -99,7 +102,7 @@ fi
 log "Installing Node.js LTS"
 if ! have node || ! node --version 2>/dev/null | grep -qE '^v(20|22|24)\.'; then
   curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo -E bash -
-  sudo DEBIAN_FRONTEND=noninteractive apt-get install -y nodejs
+  sudo DEBIAN_FRONTEND=noninteractive apt-get install -y "${APT_OPTS[@]}" nodejs
 fi
 # Sanity-check npm exists before we touch its config (NodeSource ships npm with nodejs)
 if ! have npm; then
