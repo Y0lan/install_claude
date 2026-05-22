@@ -1,0 +1,4 @@
+bootstrap.ps1 text eol=lf
+install.sh text eol=lf
+README.md text eol=lf
+.gitattributes text eol=lf

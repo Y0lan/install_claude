@@ -30,6 +30,23 @@ function Log($msg, $color = "Cyan") {
 function Warn($msg) { Write-Host "    ! $msg" -ForegroundColor Yellow }
 function Die ($msg) { Write-Host "    X $msg" -ForegroundColor Red; exit 1 }
 
+# Strip CR bytes so anything we hand to bash inside WSL has pure LF endings.
+# Git on Windows defaults to core.autocrlf=true, which CRLF-ifies any text file
+# on checkout (including our .ps1 here-strings and .sh script). Bash chokes on
+# `set -e\r`, on heredoc delimiters that don't match because of trailing \r,
+# and on scripts whose every line ends in `\r`. .gitattributes prevents this
+# on FUTURE clones; this function fixes it at runtime for clones already done.
+function ConvertTo-LfText {
+  param([string]$s)
+  return ($s -replace "`r`n", "`n") -replace "`r", "`n"
+}
+function ConvertTo-LfBytes {
+  param([byte[]]$bytes)
+  $out = New-Object System.IO.MemoryStream
+  foreach ($b in $bytes) { if ($b -ne 0x0d) { $out.WriteByte($b) } }
+  return $out.ToArray()
+}
+
 # Native-exe call helper. $ErrorActionPreference="Stop" does NOT trap non-zero
 # exits from native binaries (wsl.exe, dism.exe, etc.) - only from PowerShell
 # cmdlets. We have to check $LASTEXITCODE ourselves every time.
@@ -208,6 +225,7 @@ default=$Username
 systemd=true
 WSLCONF
 "@
+$bashUser = ConvertTo-LfText $bashUser
 wsl -d $Distro -u root -- bash -c $bashUser
 if ($LASTEXITCODE -ne 0) { Die "User provisioning inside $Distro failed (wsl exit $LASTEXITCODE). See output above." }
 
@@ -240,7 +258,8 @@ if (-not (Test-Path $installSh)) {
 Log "Streaming install.sh into ~$Username/install.sh via stdin (avoids argv-size limit)"
 # Base64-encode then pipe over stdin so wsl.exe sees a tiny invariant argv.
 # Bash receives the b64 on stdin, decodes to ~/install.sh, sets +x.
-$b64 = [Convert]::ToBase64String([IO.File]::ReadAllBytes($installSh))
+$installBytes = [byte[]](ConvertTo-LfBytes ([IO.File]::ReadAllBytes($installSh)))
+$b64 = [Convert]::ToBase64String($installBytes)
 $b64 | & wsl -d $Distro -u $Username --cd "~" -- bash -c 'set -e; base64 -d > ~/install.sh && chmod +x ~/install.sh'
 if ($LASTEXITCODE -ne 0) { Die "Failed to copy install.sh into WSL (wsl/base64 exit $LASTEXITCODE)" }
 
