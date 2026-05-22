@@ -49,6 +49,10 @@ if ! have sudo; then
 fi
 
 USER_NAME="$(whoami)"
+if ! sudo -n true 2>/dev/null; then
+  echo "FATAL: passwordless sudo is not configured for $USER_NAME. Re-run bootstrap.ps1 so it can write /etc/sudoers.d/99-${USER_NAME}-nopasswd." >&2
+  exit 100
+fi
 log "User: $USER_NAME - home: $HOME - skip-skill-setup: $SKIP_SKILL_SETUP"
 log "Expect 10-30 min total (apt updates, npm globals, gstack runs playwright install ~300MB)."
 log "A few steps will pause for input - that's intentional:"

@@ -262,6 +262,10 @@ Log "Copying install.sh into ~$Username/install.sh"
 wsl -d $Distro -u $Username -- true
 if ($LASTEXITCODE -ne 0) { Die "Failed to start $Distro before copying install.sh (wsl exit $LASTEXITCODE)" }
 
+Log "Verifying passwordless sudo for '$Username'"
+wsl -d $Distro -u $Username -- sudo -n true
+if ($LASTEXITCODE -ne 0) { Die "Passwordless sudo is not working for '$Username' inside $Distro (wsl/sudo exit $LASTEXITCODE)." }
+
 $installText = ConvertTo-LfText ([IO.File]::ReadAllText($installSh))
 $utf8NoBom = New-Object System.Text.UTF8Encoding -ArgumentList $false
 $copyError = $null
