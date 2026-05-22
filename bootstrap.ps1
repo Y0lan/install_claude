@@ -54,25 +54,57 @@ if ($Distro -notmatch '^[A-Za-z0-9._-]+$') {
   Die "Invalid distro name '$Distro'. Letters/digits/dot/underscore/dash only."
 }
 
-# ---------- 1. WSL feature + VM Platform ----------
-Log "Enabling Windows-Subsystem-for-Linux and VirtualMachinePlatform features"
-$justEnabled = $false
-$f1 = Get-WindowsOptionalFeature -Online -FeatureName Microsoft-Windows-Subsystem-Linux
-$f2 = Get-WindowsOptionalFeature -Online -FeatureName VirtualMachinePlatform
-if ($f1.State -ne "Enabled") {
-  Enable-WindowsOptionalFeature -Online -FeatureName Microsoft-Windows-Subsystem-Linux -All -NoRestart | Out-Null
-  $justEnabled = $true
+# ---------- 1. Detect / enable WSL ----------
+# IMPORTANT: on modern Win10/11, `wsl --install` ships WSL as a Microsoft Store
+# package and does NOT flip the legacy optional-feature flags. A fully working
+# WSL machine can therefore show both features as 'Disabled'. If we trust those
+# flags blindly, we'll loop forever asking for reboots on every run.
+# Truth source: does `wsl --status` actually exit 0? If yes, WSL works, period.
+function Test-WslWorks {
+  $cmd = Get-Command wsl.exe -ErrorAction SilentlyContinue
+  if (-not $cmd) { return $false }
+  # --status is non-interactive, fast, exits 0 only when WSL is functional.
+  $null = & $cmd.Source --status 2>&1
+  return ($LASTEXITCODE -eq 0)
 }
-if ($f2.State -ne "Enabled") {
-  Enable-WindowsOptionalFeature -Online -FeatureName VirtualMachinePlatform -All -NoRestart | Out-Null
-  $justEnabled = $true
-}
-if ($justEnabled) {
-  Write-Host ""
-  Write-Host "  WSL features were just enabled - REBOOT REQUIRED before WSL can work." -ForegroundColor Yellow
-  Write-Host "  Reboot Windows, then re-run this script. Everything done so far is idempotent." -ForegroundColor Yellow
-  Write-Host ""
-  exit 0
+
+if (Test-WslWorks) {
+  Log "WSL is already functional (skipping optional-feature enablement)"
+} else {
+  Log "WSL not yet functional - checking optional features"
+  $needReboot = $false
+  $features = @(
+    @{ Name = 'Microsoft-Windows-Subsystem-Linux'; Pretty = 'WSL' },
+    @{ Name = 'VirtualMachinePlatform';            Pretty = 'Virtual Machine Platform' }
+  )
+  foreach ($f in $features) {
+    $state = (Get-WindowsOptionalFeature -Online -FeatureName $f.Name).State
+    switch ($state) {
+      'Enabled'        { } # nothing to do
+      'EnablePending'  { Warn "$($f.Pretty) is already EnablePending - reboot needed"; $needReboot = $true }
+      'Disabled'       {
+        Log "Enabling $($f.Pretty)"
+        Enable-WindowsOptionalFeature -Online -FeatureName $f.Name -All -NoRestart | Out-Null
+        $needReboot = $true
+      }
+      'DisablePending' {
+        Warn "$($f.Pretty) is mid-disable; re-enabling and queuing for reboot"
+        Enable-WindowsOptionalFeature -Online -FeatureName $f.Name -All -NoRestart | Out-Null
+        $needReboot = $true
+      }
+      default { Warn "$($f.Pretty) is in unexpected state '$state' - continuing anyway" }
+    }
+  }
+  if ($needReboot) {
+    Write-Host ""
+    Write-Host "  WSL features need activation - REBOOT REQUIRED before they take effect." -ForegroundColor Yellow
+    Write-Host "  Reboot Windows, then re-run this script (see README - 'Re-run' command)." -ForegroundColor Yellow
+    Write-Host "  Everything done so far is idempotent." -ForegroundColor Yellow
+    Write-Host ""
+    exit 0
+  }
+  # Features were already Enabled but wsl.exe still failed. Step 2's `wsl --update`
+  # may fix that by installing the WSL Store package + kernel. Continue.
 }
 
 # ---------- 2. WSL update + default version ----------
