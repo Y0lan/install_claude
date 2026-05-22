@@ -405,11 +405,20 @@ if ($wtSettings) {
     if (-not $json.profiles.PSObject.Properties['defaults']) {
       $json.profiles | Add-Member -NotePropertyName defaults -NotePropertyValue ([pscustomobject]@{}) -Force
     }
+    function Set-WtProfileAppearance($profile) {
+      $profile | Add-Member -NotePropertyName colorScheme -NotePropertyValue "Campbell" -Force
+      $profile | Add-Member -NotePropertyName background  -NotePropertyValue "#0C0C0C" -Force
+      $profile | Add-Member -NotePropertyName foreground  -NotePropertyValue "#CCCCCC" -Force
+      $profile | Add-Member -NotePropertyName cursorColor -NotePropertyValue "#FFFFFF" -Force
+      $profile | Add-Member -NotePropertyName useAcrylic  -NotePropertyValue $false -Force
+      $profile | Add-Member -NotePropertyName opacity     -NotePropertyValue 100 -Force
+    }
     # "FiraCode Nerd Font Mono" - single-cell glyphs, the variant terminals want.
     # The plain "FiraCode Nerd Font" family renders icons 2 cells wide and can
     # nudge column alignment in Powerline-style prompts.
     $font = [pscustomobject]@{ face = "FiraCode Nerd Font Mono"; size = 11 }
     $json.profiles.defaults | Add-Member -NotePropertyName font -NotePropertyValue $font -Force
+    Set-WtProfileAppearance $json.profiles.defaults
 
     $profileList = $null
     if ($json.profiles.PSObject.Properties['list']) { $profileList = $json.profiles.list }
@@ -418,6 +427,7 @@ if ($wtSettings) {
       if ($ubuntu) {
         $ubuntu | Add-Member -NotePropertyName commandline       -NotePropertyValue "wsl.exe -d `"$Distro`" --cd $linuxHome -- zsh -l" -Force
         $ubuntu | Add-Member -NotePropertyName startingDirectory -NotePropertyValue "\\wsl$\$Distro\home\$Username"          -Force
+        Set-WtProfileAppearance $ubuntu
         if ($ubuntu.PSObject.Properties['guid']) { $json.defaultProfile = $ubuntu.guid }
       } else {
         Warn "No '$Distro' profile found in Windows Terminal - open WT once to let it auto-detect."
@@ -433,9 +443,10 @@ if ($wtSettings) {
     Copy-Item $bak $wtSettings -Force
     Write-Host "    Manual steps to apply the same changes:" -ForegroundColor Yellow
     Write-Host "      1. Open WT -> Settings -> Profiles -> Defaults -> Appearance -> Font face: 'FiraCode Nerd Font Mono'" -ForegroundColor Yellow
-    Write-Host "      2. Set default profile to '$Distro'" -ForegroundColor Yellow
-    Write-Host "      3. In the '$Distro' profile, set Command line: wsl.exe -d $Distro --cd $linuxHome -- zsh -l" -ForegroundColor Yellow
-    Write-Host "      4. Starting directory: \\wsl`$\$Distro\home\$Username" -ForegroundColor Yellow
+    Write-Host "      2. In Appearance, set Color scheme: Campbell, Background: #0C0C0C, Acrylic: off" -ForegroundColor Yellow
+    Write-Host "      3. Set default profile to '$Distro'" -ForegroundColor Yellow
+    Write-Host "      4. In the '$Distro' profile, set Command line: wsl.exe -d $Distro --cd $linuxHome -- zsh -l" -ForegroundColor Yellow
+    Write-Host "      5. Starting directory: \\wsl`$\$Distro\home\$Username" -ForegroundColor Yellow
   }
 } else {
   Warn "Windows Terminal not installed - skipping settings patch."

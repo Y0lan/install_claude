@@ -59,7 +59,7 @@ If WSL features had to be enabled for the first time, the script will tell you t
   - [`obra/superpowers`](https://github.com/obra/superpowers)
   - [`mattpocock/skills`](https://github.com/mattpocock/skills)
 - Installs **FiraCode Nerd Font Mono** (ligatures, single-cell glyphs - clean Powerline alignment)
-- Patches Windows Terminal: default font, default profile points at Ubuntu-22.04, opens in `~` with `zsh -l`
+- Patches Windows Terminal: neutral dark background, default font, default profile points at Ubuntu-22.04, opens in `~` with `zsh -l`
 - Creates a Desktop shortcut `Ubuntu-22.04 (zsh).lnk`
 - Creates a Desktop shortcut `Claude Code (auto).lnk` that opens WSL and launches `claude --permission-mode bypassPermissions`
 - Opens a fresh terminal at the end -> first-run hook auto-launches `claude` for OAuth
