@@ -765,16 +765,30 @@ install_skill_bundle() {
   fi
 }
 
+install_matt_pocock_skills() {
+  if [ -f "$HOME/.claude/skills/setup-matt-pocock-skills/SKILL.md" ] ||
+     [ -f "$HOME/.codex/skills/setup-matt-pocock-skills/SKILL.md" ]; then
+    log "  mattpocock/skills: setup-matt-pocock-skills already installed; skipping"
+    return 0
+  fi
+
+  log "  mattpocock/skills: running official installer (interactive)"
+  log "  mattpocock/skills: select Claude Code/Codex as needed, and include setup-matt-pocock-skills"
+  if ! npx --yes skills@latest add mattpocock/skills; then
+    log "  mattpocock/skills: WARN installer exited non-zero"
+    SKILL_FAILURES+=("mattpocock/skills (skills CLI installer failed)")
+  fi
+}
+
 # Canonical repos (verified May 2026 - change if upstream moves):
 GSTACK_REPO="https://github.com/garrytan/gstack.git"
 KARPATHY_REPO="https://github.com/forrestchang/andrej-karpathy-skills.git"
 SUPERPOWERS_REPO="https://github.com/obra/superpowers.git"
-MATT_POCOCK_REPO="https://github.com/mattpocock/skills.git"
 
 install_gstack       "gstack"                 "$GSTACK_REPO"
 install_skill_bundle "andrej-karpathy-skills" "$KARPATHY_REPO"     "andrej-karpathy-skills"
 install_skill_bundle "superpowers"            "$SUPERPOWERS_REPO"  "obra/superpowers"
-install_skill_bundle "matt-pocock-skills"     "$MATT_POCOCK_REPO"  "mattpocock/skills"
+install_matt_pocock_skills
 
 # Alternative install path for superpowers (via Claude Code marketplace, after OAuth):
 #   /plugin install superpowers@claude-plugins-official

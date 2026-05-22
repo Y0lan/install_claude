@@ -25,8 +25,8 @@ Attention : supprimer Ubuntu WSL efface tous les fichiers Linux de cette distrib
 - un raccourci Bureau `Ubuntu-22.04 (zsh).lnk`
 - un raccourci Bureau `Claude Code (auto).lnk`
 - Claude Code, Codex, Bun, Node, Chrome, zsh, tmux, eza, fzf, ripgrep, bat
-- `claude-mem`, `gstack` et Superpowers installés
-- Karpathy et Matt Pocock à finaliser avec quelques commandes après le login Claude
+- `claude-mem`, `gstack`, Superpowers et Matt Pocock installés
+- Karpathy à finaliser avec 2 commandes après le login Claude
 
 ## Étape 1 - Ouvrir PowerShell admin
 
@@ -72,6 +72,13 @@ Pour `claude-mem` :
 ```text
 Harness: choisissez Claude Code et Codex
 Provider: choisissez Claude Code
+```
+
+Pour Matt Pocock :
+
+```text
+Sélectionnez les skills voulus.
+Vérifiez que setup-matt-pocock-skills est sélectionné.
 ```
 
 Le script ne lance pas automatiquement le login Claude. C’est volontaire : ouvrir Chrome Linux/WSLg depuis WSL peut freezer certains PC Windows.
@@ -153,26 +160,35 @@ Suivez le login demandé par Codex.
 
 Claude et Codex doivent tous les deux être connectés si vous voulez les faire travailler ensemble.
 
-## Étape 8 - Finaliser les skills Karpathy
+## Étape 8 - Finaliser Karpathy
 
-Après le login Claude, ouvrez Claude Code et collez :
+Après le login Claude, ouvrez Claude Code.
+
+Ajoutez d’abord la marketplace :
 
 ```text
 /plugin marketplace add forrestchang/andrej-karpathy-skills
+```
+
+Puis installez le plugin :
+
+```text
 /plugin install andrej-karpathy-skills@karpathy-skills
 ```
 
-Ces commandes installent les guidelines Karpathy via le plugin Claude Code officiel du repo.
+Cette option installe les guidelines Karpathy comme plugin Claude Code, disponible dans tous les projets.
 
-## Étape 9 - Finaliser les skills Matt Pocock
+## Étape 9 - Finaliser Matt Pocock
 
-Dans le terminal WSL, collez :
+Le script lance déjà l’installateur officiel pendant l’installation :
 
 ```bash
 npx skills@latest add mattpocock/skills
 ```
 
-Pendant le choix des skills, vérifiez que `setup-matt-pocock-skills` est sélectionné.
+Quand l’installateur apparaît, sélectionnez Claude Code/Codex si demandé, et vérifiez que `setup-matt-pocock-skills` est sélectionné.
+
+Si vous avez passé cette étape trop vite ou si elle a échoué, relancez simplement la même commande dans WSL.
 
 Ensuite, dans Claude Code, lancez cette commande **dans chaque repo de projet à configurer** :
 
@@ -262,11 +278,12 @@ Installés automatiquement :
 - `claude-mem`
 - `gstack`
 - Superpowers
+- Matt Pocock via `npx skills@latest add mattpocock/skills`
 
 À finaliser après login :
 
 - Karpathy : `/plugin marketplace add ...` puis `/plugin install ...`
-- Matt Pocock : `npx skills@latest add mattpocock/skills`, puis `/setup-matt-pocock-skills`
+- Matt Pocock par repo : `/setup-matt-pocock-skills`
 
 Repères :
 
