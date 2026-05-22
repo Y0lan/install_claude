@@ -291,10 +291,8 @@ for ($copyTry = 1; $copyTry -le 10 -and -not $installDest; $copyTry++) {
 if (-not $installDest) {
   Die ("Failed to copy install.sh into WSL via \\wsl`$ or \\wsl.localhost. Last error: {0}" -f $copyError)
 }
-wsl -d $Distro -u root -- chown $Username "$linuxHome/install.sh" 2>$null | Out-Null
-if ($LASTEXITCODE -ne 0) { Warn "Could not chown ~/install.sh to $Username (continuing; bash only needs read access)" }
-wsl -d $Distro -u root -- chmod 0644 "$linuxHome/install.sh" 2>$null | Out-Null
-if ($LASTEXITCODE -ne 0) { Warn "Could not chmod ~/install.sh (continuing; bash only needs read access)" }
+wsl -d $Distro -u $Username -- test -s "$linuxHome/install.sh"
+if ($LASTEXITCODE -ne 0) { Die "Copied install.sh is not readable inside WSL (wsl exit $LASTEXITCODE)" }
 
 # ---------- 8. Run install.sh inside Ubuntu as the user ----------
 Log "Running install.sh inside $Distro (packages, zsh, Claude, skills - takes several minutes)"
