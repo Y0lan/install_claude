@@ -249,16 +249,44 @@ if (-not (Test-Path $installSh)) {
   Die "install.sh not found beside bootstrap.ps1. Both files must be in the same folder."
 }
 Log "Copying install.sh into ~$Username/install.sh"
-# Avoid a PowerShell text pipeline here. On some Windows PowerShell/locale
-# combinations, piping a long base64 string through wsl.exe corrupts stdin and
-# Ubuntu's `base64 -d` reports "invalid input". Let WSL read the Windows file
-# directly and strip CR bytes while writing the Linux copy.
-wsl -d $Distro -u $Username --cd "~" -- bash -c 'set -e; src=$(wslpath -u "$1"); tr -d "\r" < "$src" > ~/install.sh; chmod +x ~/install.sh; test -s ~/install.sh' _ $installSh
-if ($LASTEXITCODE -ne 0) { Die "Failed to copy install.sh into WSL (wsl exit $LASTEXITCODE)" }
+# Avoid PowerShell-to-bash quoting and stdin entirely. Copy through the WSL
+# filesystem share as UTF-8/LF, then run it via `bash ~/install.sh` below so
+# executable bits do not matter.
+wsl -d $Distro -u $Username -- true
+if ($LASTEXITCODE -ne 0) { Die "Failed to start $Distro before copying install.sh (wsl exit $LASTEXITCODE)" }
+
+$installText = ConvertTo-LfText ([IO.File]::ReadAllText($installSh))
+$utf8NoBom = New-Object System.Text.UTF8Encoding -ArgumentList $false
+$copyError = $null
+$installDest = $null
+$wslRoots = @(('\\wsl$\' + $Distro), ('\\wsl.localhost\' + $Distro))
+for ($copyTry = 1; $copyTry -le 10 -and -not $installDest; $copyTry++) {
+  foreach ($root in $wslRoots) {
+    $home = Join-Path (Join-Path $root "home") $Username
+    if (-not (Test-Path $home)) {
+      $copyError = "WSL home path not found yet: $home"
+      continue
+    }
+    $candidate = Join-Path $home "install.sh"
+    try {
+      [IO.File]::WriteAllText($candidate, $installText, $utf8NoBom)
+      if ((Test-Path $candidate) -and ((Get-Item $candidate).Length -gt 0)) {
+        $installDest = $candidate
+        break
+      }
+    } catch {
+      $copyError = $_
+    }
+  }
+  if (-not $installDest) { Start-Sleep -Seconds 1 }
+}
+if (-not $installDest) {
+  Die ("Failed to copy install.sh into WSL via \\wsl`$ or \\wsl.localhost. Last error: {0}" -f $copyError)
+}
 
 # ---------- 8. Run install.sh inside Ubuntu as the user ----------
 Log "Running install.sh inside $Distro (packages, zsh, Claude, skills - takes several minutes)"
-wsl -d $Distro -u $Username --cd "~" -- bash -lc "./install.sh"
+wsl -d $Distro -u $Username --cd "~" -- bash -lc "bash ~/install.sh"
 $installRc = $LASTEXITCODE
 # install.sh exit convention: 0=ok, 1-99=N skill failures (warn, continue),
 # 100+=fatal (die, abort the rest of bootstrap including the Claude auto-launch).
