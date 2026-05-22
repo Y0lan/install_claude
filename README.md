@@ -44,6 +44,14 @@ If you suspect the local clone is in a weird state and you want a guaranteed fre
 Remove-Item -Recurse -Force "$env:TEMP\install_claude"; git clone https://github.com/Y0lan/install_claude "$env:TEMP\install_claude"; cd "$env:TEMP\install_claude"; Set-ExecutionPolicy -Scope Process Bypass -Force; .\bootstrap.ps1
 ```
 
+### Fresh WSL install (WIPE Ubuntu and start over)
+
+This permanently deletes existing Ubuntu WSL distro(s), including all Linux files inside them, then installs from scratch with the latest scripts:
+
+```powershell
+Remove-Item -Recurse -Force "$env:TEMP\install_claude" -ErrorAction SilentlyContinue; git clone https://github.com/Y0lan/install_claude "$env:TEMP\install_claude"; cd "$env:TEMP\install_claude"; Set-ExecutionPolicy -Scope Process Bypass -Force; .\bootstrap.ps1 -CleanInstall
+```
+
 If WSL features had to be enabled for the first time, the script will tell you to reboot - reboot, then paste the **Re-run** line above.
 
 ## What it does
