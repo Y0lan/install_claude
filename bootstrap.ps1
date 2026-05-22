@@ -136,32 +136,20 @@ function Get-InstalledDistros {
   ($raw -replace "`0","" -split "`r?`n") | Where-Object { $_.Trim() } | ForEach-Object { $_.Trim() }
 }
 
-# 3a. Detect existing Ubuntu* distros and offer to wipe before installing.
-# This is destructive (wsl --unregister deletes the whole VHD), so we require
-# the user to type 'WIPE' in uppercase. -CleanInstall skips the prompt.
+# 3a. Detect existing Ubuntu* distros. Normal reruns never prompt to destroy
+# anything; they reuse $Distro if present and apply missing/bootstrap state
+# idempotently. -CleanInstall is the explicit destructive path for automation.
 $existingUbuntu = @(Get-InstalledDistros | Where-Object { $_ -match '^Ubuntu' })
 if ($existingUbuntu.Count -gt 0) {
   Write-Host ""
   Write-Host "Detected existing WSL Ubuntu distro(s):" -ForegroundColor Yellow
   foreach ($d in $existingUbuntu) { Write-Host "    - $d" -ForegroundColor Yellow }
   Write-Host ""
-  Write-Host "Option A: KEEP them." -ForegroundColor Cyan
-  Write-Host "    $Distro will be reused if it's in that list (your data + config preserved;" -ForegroundColor Cyan
-  Write-Host "    user/sudoers/wsl.conf re-applied idempotently). Other distros are left alone." -ForegroundColor Cyan
-  Write-Host ""
-  Write-Host "Option B: WIPE all listed distros and start clean." -ForegroundColor Red
-  Write-Host "    PERMANENTLY DELETES the VHD for each distro above - every file, every home" -ForegroundColor Red
-  Write-Host "    directory, every config. No recycle bin. Irreversible." -ForegroundColor Red
-  Write-Host ""
 
   $shouldWipe = $false
   if ($CleanInstall) {
     Warn "-CleanInstall flag set: wiping listed distros without prompting."
     $shouldWipe = $true
-  } else {
-    $answer = Read-Host "Type 'WIPE' exactly (uppercase) to delete them, or press Enter to keep"
-    # -ceq = case-sensitive equality. Prevents 'wipe', 'Wipe', etc.
-    if ($answer -ceq "WIPE") { $shouldWipe = $true }
   }
 
   if ($shouldWipe) {
@@ -175,7 +163,11 @@ if ($existingUbuntu.Count -gt 0) {
     # Re-query so subsequent checks see the fresh state.
     $existingUbuntu = @()
   } else {
-    Log "Keeping existing distros. Continuing without wiping." "Cyan"
+    if ($existingUbuntu -contains $Distro) {
+      Log "$Distro already exists - reusing it and applying any missing bootstrap state." "Cyan"
+    } else {
+      Log "Keeping existing Ubuntu distros. $Distro will be installed alongside them if missing." "Cyan"
+    }
   }
 }
 

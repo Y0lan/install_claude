@@ -281,6 +281,42 @@ alias gd='git diff'
 alias gl='git log --oneline --graph --decorate -20'
 alias ..='cd ..'
 alias ...='cd ../..'
+alias c='codex'
+alias cx='printf "\033[2J\033[3J\033[H" && claude --permission-mode bypassPermissions'
+alias t='tmux attach || tmux new -s Work'
+alias ic='tdl c'
+alias ix='tdl cx'
+alias icx='tdl c cx'
+
+# Omarchy-style tmux AI layout: editor on the left, agent pane(s) on the right.
+tdl() {
+  [[ -z ${1:-} ]] && { echo "Usage: tdl <c|cx|codex|other_ai> [<second_ai>]"; return 1; }
+  [[ -z ${TMUX:-} ]] && { echo "You must start tmux to use tdl."; return 1; }
+
+  local current_dir="$PWD"
+  local editor_pane="$TMUX_PANE"
+  local ai="$1"
+  local ai2="${2:-}"
+  local ai_pane ai2_pane editor_cmd
+
+  tmux rename-window -t "$editor_pane" "$(basename "$current_dir")"
+  tmux split-window -v -p 15 -t "$editor_pane" -c "$current_dir"
+  ai_pane=$(tmux split-window -h -p 30 -t "$editor_pane" -c "$current_dir" -P -F '#{pane_id}')
+
+  if [[ -n "$ai2" ]]; then
+    ai2_pane=$(tmux split-window -v -t "$ai_pane" -c "$current_dir" -P -F '#{pane_id}')
+    tmux send-keys -t "$ai2_pane" "$ai2" C-m
+  fi
+
+  tmux send-keys -t "$ai_pane" "$ai" C-m
+  if command -v nvim >/dev/null 2>&1; then
+    editor_cmd="nvim ."
+  else
+    editor_cmd="${EDITOR:-vim} ."
+  fi
+  tmux send-keys -t "$editor_pane" "$editor_cmd" C-m
+  tmux select-pane -t "$editor_pane"
+}
 
 # ===== fzf =====
 [ -f /usr/share/doc/fzf/examples/key-bindings.zsh ] && source /usr/share/doc/fzf/examples/key-bindings.zsh

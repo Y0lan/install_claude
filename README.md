@@ -49,7 +49,7 @@ If WSL features had to be enabled for the first time, the script will tell you t
 ## What it does
 
 - Enables WSL + Virtual Machine Platform (exits cleanly with a reboot prompt if needed)
-- Detects existing `Ubuntu*` distros and offers a `WIPE`-confirmed clean install (case-sensitive - typo-proof)
+- Reuses existing `Ubuntu-22.04` without prompting to destroy it; `-CleanInstall` is the only WSL wipe path
 - Installs Ubuntu-22.04 as the default WSL distro
 - Provisions your Linux user with **passwordless sudo** and `systemd` enabled
 - Installs Node LTS, Bun, Google Chrome (real `.deb`, not snap), zsh + oh-my-zsh + Pure prompt, ripgrep, fd, fzf, bat, etc.
@@ -121,6 +121,19 @@ The bootstrap will pause for input three times. None are blocking deadlines:
 3. **Claude Code OAuth** at the very end - opens your browser. Sign in, paste the redirect URL back into the terminal if it asks. If you close mid-flow, the next time you open the desktop shortcut zsh will retry.
 
 If any line says "command not found" or a skill is missing, just re-run `bash ~/install.sh` - it picks up where it left off and reports anything that failed in its final summary.
+
+## Shell shortcuts
+
+The managed zsh block includes Omarchy-style AI shortcuts:
+
+```bash
+c     # codex
+cx    # claude --permission-mode bypassPermissions
+t     # attach tmux or create Work session
+ic    # tmux layout with codex
+ix    # tmux layout with cx
+icx   # tmux layout with codex + cx
+```
 
 ## What's in the repo
 
