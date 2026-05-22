@@ -537,10 +537,12 @@ else
   mv "$ZSHRC.new" "$ZSHRC"
 fi
 rm -f "$MANAGED_TMP"
+log "~/.zshrc managed block ready"
 
 # ---------- 8. Claude Code ----------
 log "Checking Claude Code (@anthropic-ai/claude-code)"
 if ! have claude; then
+  log "Installing Claude Code CLI"
   if ! retry 2 npm install -g @anthropic-ai/claude-code; then
     echo "FATAL: claude-code install failed. Try: npm i -g @anthropic-ai/claude-code" >&2
     exit 100
@@ -552,6 +554,7 @@ fi
 # ---------- 9. OpenAI Codex CLI ----------
 log "Checking OpenAI Codex CLI (@openai/codex)"
 if ! have codex; then
+  log "Installing OpenAI Codex CLI"
   if ! retry 2 npm install -g @openai/codex; then
     echo "FATAL: codex install failed. Try: npm i -g @openai/codex" >&2
     exit 100

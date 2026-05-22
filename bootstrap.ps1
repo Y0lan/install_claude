@@ -25,8 +25,8 @@ Set-StrictMode -Version Latest
 # Force the Windows console + PowerShell native-command bridge to UTF-8 before
 # any WSL output is printed. Without this, UTF-8 bullets/checkmarks from WSL
 # show up in French Windows PowerShell as mojibake.
+$Utf8NoBom = New-Object System.Text.UTF8Encoding -ArgumentList $false
 try {
-  $Utf8NoBom = New-Object System.Text.UTF8Encoding -ArgumentList $false
   [Console]::InputEncoding = $Utf8NoBom
   [Console]::OutputEncoding = $Utf8NoBom
   $OutputEncoding = $Utf8NoBom
@@ -34,6 +34,7 @@ try {
 } catch {
   # Cosmetic only. The bootstrap still works if the host refuses code-page changes.
 }
+$script:LastNativeExitCode = 0
 
 function Reset-ConsoleColumn {
   try {
@@ -54,18 +55,6 @@ function Log($msg, $color = "Cyan") {
 function Warn($msg) { Reset-ConsoleColumn; Write-Host "    ! $msg" -ForegroundColor Yellow }
 function Die ($msg) { Reset-ConsoleColumn; Write-Host "    X $msg" -ForegroundColor Red; exit 1 }
 
-function Write-NativeOutputLine {
-  param([object]$Value)
-  $text = if ($null -eq $Value) { "" } else { $Value.ToString() }
-  $text = $text -replace "`r", "`n"
-  foreach ($line in ($text -split "`n")) {
-    $clean = $line.TrimEnd()
-    if ([string]::IsNullOrWhiteSpace($clean)) { continue }
-    Reset-ConsoleColumn
-    Write-Host "    $clean"
-  }
-}
-
 # Strip CR bytes so any here-string we hand to bash inside WSL has pure LF endings.
 # Git on Windows defaults to core.autocrlf=true, which CRLF-ifies any text file
 # on checkout. Bash chokes on `set -e\r` and on heredoc delimiters that don't
@@ -76,31 +65,11 @@ function ConvertTo-LfText {
   return ($s -replace "`r`n", "`n") -replace "`r", "`n"
 }
 
-# Native-exe call helper. $ErrorActionPreference="Stop" does NOT trap non-zero
-# exits from native binaries (wsl.exe, dism.exe, etc.) - only from PowerShell
-# cmdlets. We have to check $LASTEXITCODE ourselves every time.
-function Invoke-Native {
-  param([string]$Label, [scriptblock]$Block, [int[]]$AllowedExitCodes = @(0))
-  $oldEap = $ErrorActionPreference
-  try {
-    # Windows PowerShell turns native stderr (wsl.exe, dism.exe, etc.) into
-    # NativeCommandError records. With ErrorActionPreference=Stop, harmless WSL
-    # warnings can otherwise abort before we inspect $LASTEXITCODE.
-    $ErrorActionPreference = "Continue"
-    & $Block
-    $rc = $LASTEXITCODE
-  } finally {
-    $ErrorActionPreference = $oldEap
-  }
-  if ($AllowedExitCodes -notcontains $rc) {
-    Die "$Label failed (exit $rc). Stopping bootstrap; rerun after fixing."
-  }
-  return $rc
-}
-
 function Invoke-NativeCaptured {
   param([scriptblock]$Block)
   $oldEap = $ErrorActionPreference
+  $output = @()
+  $rc = 1
   try {
     $ErrorActionPreference = "Continue"
     $output = & $Block 2>&1
@@ -112,37 +81,39 @@ function Invoke-NativeCaptured {
   return [pscustomobject]@{ ExitCode = $rc; Output = $text }
 }
 
-function Invoke-NativeStreamed {
-  param([scriptblock]$Block)
-  $oldEap = $ErrorActionPreference
-  try {
-    # Stream stdout/stderr line-by-line. Capturing a long WSL install into one
-    # string and printing it later makes PowerShell wrap line breaks badly.
-    $ErrorActionPreference = "Continue"
-    & $Block 2>&1 | ForEach-Object {
-      Write-NativeOutputLine $_
-    }
-    $rc = $LASTEXITCODE
-  } finally {
-    $ErrorActionPreference = $oldEap
-  }
-  return [pscustomobject]@{ ExitCode = $rc }
-}
-
 function Invoke-NativePassthrough {
   param([scriptblock]$Block)
   $oldEap = $ErrorActionPreference
+  $script:LastNativeExitCode = $null
   try {
     # Used for interactive WSL commands. Do not pipe stdout/stderr through
     # PowerShell here: prompts such as `npx claude-mem install` need a real TTY,
     # and PowerShell's pipeline can also re-decode UTF-8 WSL output incorrectly.
+    # Call this as a statement, never in an assignment. Read the result through
+    # Last-NativeExitCode / Assert-NativeSucceeded.
     $ErrorActionPreference = "Continue"
     & $Block
-    $rc = $LASTEXITCODE
+    $script:LastNativeExitCode = $LASTEXITCODE
   } finally {
     $ErrorActionPreference = $oldEap
   }
-  return [pscustomobject]@{ ExitCode = $rc }
+  if ($null -eq $script:LastNativeExitCode) {
+    $script:LastNativeExitCode = 1
+  }
+}
+
+function Last-NativeExitCode {
+  if ($null -eq $script:LastNativeExitCode) { return 1 }
+  return [int]$script:LastNativeExitCode
+}
+
+function Assert-NativeSucceeded {
+  param([string]$Label, [string]$Hint = "")
+  $rc = Last-NativeExitCode
+  if ($rc -ne 0) {
+    $suffix = if ([string]::IsNullOrWhiteSpace($Hint)) { "" } else { " $Hint" }
+    Die "$Label failed (exit $rc).$suffix"
+  }
 }
 
 function Test-FiraCodeNerdFontInstalled {
@@ -243,8 +214,9 @@ if (Test-WslWorks) {
 # ---------- 2. WSL update + default version ----------
 Log "Updating WSL kernel (best-effort)"
 try {
-  $updateResult = Invoke-NativePassthrough { wsl --update --web-download }
-  if ($updateResult.ExitCode -ne 0) { Warn "wsl --update exited $($updateResult.ExitCode) (often fine on locked-down corp machines)" }
+  Invoke-NativePassthrough { wsl --update --web-download }
+  $updateRc = Last-NativeExitCode
+  if ($updateRc -ne 0) { Warn "wsl --update exited $updateRc (often fine on locked-down corp machines)" }
 } catch {
   Warn "wsl --update failed (often fine on locked-down corp machines): $_"
 }
@@ -290,8 +262,8 @@ if ($existingUbuntu.Count -gt 0) {
     foreach ($d in $existingUbuntu) {
       Log "Unregistering $d (PERMANENT DELETE)" "Red"
       $null = Invoke-NativeCaptured { wsl --terminate $d }
-      $unregister = Invoke-NativePassthrough { wsl --unregister $d }
-      if ($unregister.ExitCode -ne 0) { Die "wsl --unregister $d failed (exit $($unregister.ExitCode)). Aborting before partial state can cause confusion." }
+      Invoke-NativePassthrough { wsl --unregister $d }
+      Assert-NativeSucceeded "wsl --unregister $d" "Aborting before partial state can cause confusion."
     }
     Log "Wipe complete. Continuing with clean install of $Distro." "Green"
     # Re-query so subsequent checks see the fresh state.
@@ -307,8 +279,8 @@ if ($existingUbuntu.Count -gt 0) {
 
 if ((Get-InstalledDistros) -notcontains $Distro) {
   Log "Installing $Distro (no launch)"
-  $installResult = Invoke-NativePassthrough { wsl --install -d $Distro --no-launch }
-  if ($installResult.ExitCode -ne 0) { Die "wsl --install -d $Distro failed (exit $($installResult.ExitCode)). Check the output above; common cause: distro name unsupported on this WSL build. Try 'wsl --list --online' to see valid names." }
+  Invoke-NativePassthrough { wsl --install -d $Distro --no-launch }
+  Assert-NativeSucceeded "wsl --install -d $Distro" "Check the output above; common cause: distro name unsupported on this WSL build. Try 'wsl --list --online' to see valid names."
 } else {
   Log "$Distro already installed (reusing existing)"
 }
@@ -356,8 +328,8 @@ appendWindowsPath=true
 WSLCONF
 "@
 $bashUser = ConvertTo-LfText $bashUser
-$provision = Invoke-NativePassthrough { wsl -d $Distro -u root -- bash -c $bashUser }
-if ($provision.ExitCode -ne 0) { Die "User provisioning inside $Distro failed (wsl exit $($provision.ExitCode)). See output above." }
+Invoke-NativePassthrough { wsl -d $Distro -u root -- bash -c $bashUser }
+Assert-NativeSucceeded "User provisioning inside $Distro" "See output above."
 
 # Belt-and-suspenders: also try the legacy per-distro launcher exe (ubuntu2204.exe,
 # ubuntu.exe). These exist only on Microsoft-Store-distribution installs from the
@@ -375,8 +347,8 @@ if (-not $launcherSet) {
 
 # ---------- 6. Default WSL distro ----------
 Log "Setting $Distro as default WSL distro"
-$setDefault = Invoke-NativePassthrough { wsl --set-default $Distro }
-if ($setDefault.ExitCode -ne 0) { Die "wsl --set-default $Distro failed (exit $($setDefault.ExitCode))." }
+Invoke-NativePassthrough { wsl --set-default $Distro }
+Assert-NativeSucceeded "wsl --set-default $Distro"
 
 # Terminate so wsl.conf takes effect on next launch
 $null = Invoke-NativeCaptured { wsl --terminate $Distro }
@@ -433,8 +405,8 @@ if ($copyCheck.ExitCode -ne 0) { Die "Copied install.sh is not readable inside W
 
 # ---------- 8. Run install.sh inside Ubuntu as the user ----------
 Log "Running install.sh inside $Distro (packages, zsh, Claude, skills - takes several minutes)"
-$installResult = Invoke-NativePassthrough { wsl -d $Distro -u $Username --cd $linuxHome -- bash -lc "bash ~/install.sh" }
-$installRc = $installResult.ExitCode
+Invoke-NativePassthrough { wsl -d $Distro -u $Username --cd $linuxHome -- bash -lc "bash ~/install.sh" }
+$installRc = Last-NativeExitCode
 # install.sh exit convention: 0=ok, 1-99=N skill failures (warn, continue),
 # 100+=fatal (die, abort the rest of bootstrap including the Claude auto-launch).
 if ($installRc -ge 100) {
@@ -452,6 +424,12 @@ try {
   } else {
     $fontDir = Join-Path $env:TEMP "FiraCodeNF"
     $fontZip = "$fontDir.zip"
+    if (Test-Path $fontDir) {
+      $fontFiles = @(Get-ChildItem $fontDir -Filter "*.ttf" -File -ErrorAction SilentlyContinue)
+      if ($fontFiles.Count -eq 0) {
+        Remove-Item -Recurse -Force $fontDir -ErrorAction SilentlyContinue
+      }
+    }
     if (-not (Test-Path $fontDir)) {
       Invoke-WebRequest -Uri "https://github.com/ryanoasis/nerd-fonts/releases/latest/download/FiraCode.zip" `
                         -OutFile $fontZip -UseBasicParsing
