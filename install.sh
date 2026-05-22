@@ -34,6 +34,8 @@ fi
 
 USER_NAME="$(whoami)"
 log "User: $USER_NAME — home: $HOME — skip-skill-setup: $SKIP_SKILL_SETUP"
+log "Expect 10-30 min total (apt updates, npm globals, gstack runs playwright install ~300MB)."
+log "No interactive prompts. gstack may ask one question with a 10s timeout — we pass -q to skip it."
 
 # Accumulator for skill-clone failures (reported at end, doesn't abort the script)
 declare -a SKILL_FAILURES=()
@@ -338,9 +340,14 @@ install_skill() {
       # Run upstream setup/install scripts if present.
       # SECURITY: this executes code from the cloned repo. You opted in by
       # listing the URL above. Run with --no-skill-setup to disable.
+      # gstack/setup has a 10s-timeout prompt about skill name prefix; -q skips it
+      # and picks the default. Other upstream setups don't have known prompts.
+      local setup_args=()
+      [ "$name" = "gstack" ] && setup_args=("-q")
+
       if [ -x "$dest/setup" ]; then
-        log "  $name: running ./setup"
-        if ! ( cd "$dest" && ./setup ); then
+        log "  $name: running ./setup ${setup_args[*]}"
+        if ! ( cd "$dest" && ./setup "${setup_args[@]}" ); then
           log "  $name: WARN setup exited non-zero"
           SKILL_FAILURES+=("$name (setup script failed)")
         fi
