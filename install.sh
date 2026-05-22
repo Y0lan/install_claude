@@ -71,7 +71,9 @@ choose_optional() {
     return 0
   fi
 
-  read -r -p "  $label [$default/n]: " answer
+  if ! read -r -p "  $label [$default/n]: " answer; then
+    answer="$default"
+  fi
   answer="${answer:-$default}"
   normalized="${answer,,}"
   case "$normalized" in
