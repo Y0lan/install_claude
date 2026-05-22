@@ -59,10 +59,15 @@ git fetch origin; git reset --hard origin/main
 
 ## Utiliser Claude
 
-- **`Claude Code (auto).lnk`** → Claude en `bypassPermissions`
-- **`Ubuntu-22.04 (zsh).lnk`** → terminal WSL seul
+**Lancez toujours Claude depuis WSL avec `cx`** — pas via un raccourci Windows.
 
-Alias utiles dans WSL : `c` (codex), `cx` (claude auto), `claude-login`, `t` (tmux), `gst` / `gp` / `gP` (git).
+```bash
+cx
+```
+
+`cx` = `claude --permission-mode bypassPermissions` dans le terminal WSL. C’est la seule façon fiable d’avoir le bon environnement (Node, Bun, `claude-mem`, skills…).
+
+Autres alias WSL : `c` (codex), `claude-login`, `t` (tmux), `gst` / `gp` / `gP` (git).
 
 ## Notes
 
