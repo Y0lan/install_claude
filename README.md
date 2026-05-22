@@ -52,14 +52,21 @@ C’est fini ! Pensez aussi à `codex` une fois pour logger Codex.
 
 ## 3. Finaliser les skills
 
-Dans Claude Code :
+Dans Claude Code, lancez les deux commandes Karpathy **une à la fois** (attendez la fin de la première avant la seconde).
+
+D’abord, ajoutez la marketplace :
 
 ```text
 /plugin marketplace add forrestchang/andrej-karpathy-skills
+```
+
+Puis installez le plugin :
+
+```text
 /plugin install andrej-karpathy-skills@karpathy-skills
 ```
 
-Dans **chaque repo** où vous voulez Matt Pocock :
+Ensuite, dans **chaque repo** où vous voulez Matt Pocock :
 
 ```text
 /setup-matt-pocock-skills
