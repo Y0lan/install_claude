@@ -31,6 +31,8 @@ Attention : tous les fichiers Linux dans les Ubuntu WSL supprimés seront perdus
 Remove-Item -Recurse -Force "$env:TEMP\install_claude" -ErrorAction SilentlyContinue; git clone https://github.com/Y0lan/install_claude "$env:TEMP\install_claude"; cd "$env:TEMP\install_claude"; Set-ExecutionPolicy -Scope Process Bypass -Force; .\bootstrap.ps1 -CleanInstall
 ```
 
+Si le script détecte un Ubuntu WSL existant, il demandera confirmation. Appuyez simplement sur **Entrée** pour le supprimer et repartir proprement.
+
 ## 3. Si le script demande un redémarrage
 
 Si le script active WSL et demande de redémarrer :
@@ -89,7 +91,33 @@ Pour les skills Matt Pocock, lancez ensuite cette commande **dans le repo du pro
 
 Cette étape vient du quickstart officiel de `mattpocock/skills`. Elle n’est pas lancée automatiquement parce qu’elle configure le repo courant (`AGENTS.md` ou `CLAUDE.md`, tracker, labels, docs). Il faut donc la lancer une fois par projet.
 
-## 7. Vérifier rapidement
+## 7. Ce qu’il faut savoir sur les skills
+
+Le setup installe bien :
+
+- `claude-mem`
+- Karpathy skills
+- `gstack`
+- Matt Pocock skills
+- Superpowers
+
+Connectez-vous à **Claude Code** et à **Codex**. Les deux doivent être authentifiés pour travailler ensemble correctement.
+
+Exemple d’usage utile dans Claude :
+
+```text
+Challenge ton plan avec Codex avant de modifier le code.
+```
+
+Autres repères :
+
+- `claude-mem` garde du contexte/mémoire entre les sessions.
+- Karpathy apporte des skills de raisonnement et de travail avec les LLM.
+- `gstack` ajoute des workflows orientés agent et setup de skills.
+- Matt Pocock ajoute des skills de dev TypeScript/PRD/issues/diagnostic. Lancez `/setup-matt-pocock-skills` dans chaque repo où vous voulez les utiliser.
+- Superpowers ajoute des commandes et habitudes de travail Claude Code.
+
+## 8. Vérifier rapidement
 
 Dans le terminal WSL, collez :
 

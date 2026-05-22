@@ -232,9 +232,9 @@ function Get-InstalledDistros {
   ($raw -replace "`0","" -split "`r?`n") | Where-Object { $_.Trim() } | ForEach-Object { $_.Trim() }
 }
 
-# 3a. Detect existing Ubuntu* distros. Normal reruns never prompt to destroy
-# anything; they reuse $Distro if present and apply missing/bootstrap state
-# idempotently. -CleanInstall is the explicit destructive path for automation.
+# 3a. Detect existing Ubuntu* distros. Normal reruns reuse $Distro if present
+# and apply missing/bootstrap state idempotently. -CleanInstall is the explicit
+# fresh-start path, but still asks before deleting existing Ubuntu data.
 $existingUbuntu = @(Get-InstalledDistros | Where-Object { $_ -match '^Ubuntu' })
 if ($existingUbuntu.Count -gt 0) {
   Write-Host ""
@@ -244,8 +244,17 @@ if ($existingUbuntu.Count -gt 0) {
 
   $shouldWipe = $false
   if ($CleanInstall) {
-    Warn "-CleanInstall flag set: wiping listed distros without prompting."
-    $shouldWipe = $true
+    Warn "-CleanInstall requested: the listed Ubuntu WSL distro(s) will be deleted before reinstalling $Distro."
+    Write-Host ""
+    Write-Host "    Press Enter to DELETE them and start fresh." -ForegroundColor Yellow
+    Write-Host "    Type KEEP then Enter to cancel deletion and reuse what is already there." -ForegroundColor Yellow
+    Write-Host ""
+    $answer = Read-Host "Delete existing Ubuntu WSL distro(s)? [DELETE/keep] (default: DELETE)"
+    if ([string]::IsNullOrWhiteSpace($answer) -or $answer -match '^(DELETE|DESTROY|WIPE|YES|Y)$') {
+      $shouldWipe = $true
+    } else {
+      Warn "Keeping existing Ubuntu WSL distro(s); continuing idempotent install without wiping."
+    }
   }
 
   if ($shouldWipe) {
