@@ -13,20 +13,42 @@ PowerShell admin :
 Remove-Item -Recurse -Force "$env:TEMP\install_claude" -ErrorAction SilentlyContinue; git clone https://github.com/Y0lan/install_claude "$env:TEMP\install_claude"; cd "$env:TEMP\install_claude"; Set-ExecutionPolicy -Scope Process Bypass -Force; .\bootstrap.ps1 -CleanInstall
 ```
 
-Pendant l’install :
-- `gstack` → laissez les défauts (Entrée)
-- `claude-mem` → cochez **Claude Code + Codex CLI**, puis choisissez **Claude Code** pour la suite
-- Matt Pocock (`SKILLS`) → choisissez **Claude**, **Global**, et **Symlink**
-- si Windows demande un reboot, redémarrez puis relancez (voir §4)
+Pendant l’install, répondez exactement ceci aux prompts :
+
+**`gstack`** → Entrée (défauts).
+
+**`claude-mem`** (dans l’ordre) :
+1. IDE → cochez **Claude Code** + **Codex CLI**
+2. Worker → **Claude Agent SDK**
+3. Plan → **Subscription Plan**
+4. Modèle → **Haiku 4.5**
+
+**Matt Pocock (`SKILLS`)** :
+1. Skills → **tout cocher** (`Espace` sur chaque, puis `Entrée`)
+2. Tapez `claude`, sélectionnez **Claude**, `Entrée`
+3. **Global**, `Entrée`
+4. **Symlink**, `Entrée`
+5. Laissez l’install se terminer
+
+**`find-skills`** → **Yes**.
+
+Si Windows demande un reboot, redémarrez puis relancez (voir §4).
 
 ## 2. Se connecter
 
-Ouvrez le raccourci Bureau **`Ubuntu-22.04 (zsh).lnk`**, puis :
+Dans le terminal WSL qui s’ouvre à la fin de l’install (ou via **`Ubuntu-22.04 (zsh).lnk`**) :
 
 ```bash
-claude-login   # copie l’URL, ouvrez-la dans votre navigateur Windows
-codex          # login Codex
+cx
 ```
+
+Puis :
+1. `Entrée`, `Entrée`
+2. Tapez `c` (login navigateur)
+3. Copiez l’URL → ouvrez-la dans **Chrome Windows** → collez l’URL
+4. Récupérez le code de Claude et collez-le dans le terminal
+
+C’est fini ! Pensez aussi à `codex` une fois pour logger Codex.
 
 ## 3. Finaliser les skills
 
