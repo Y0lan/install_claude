@@ -23,6 +23,22 @@ done
 # ---------- helpers ----------
 log() { printf '\033[1;36m[%(%H:%M:%S)T]\033[0m %s\n' -1 "$*"; }
 have() { command -v "$1" >/dev/null 2>&1; }
+retry() {
+  local tries="$1"; shift
+  local delay=2
+  local rc=0
+  local i
+  for ((i = 1; i <= tries; i++)); do
+    if "$@"; then return 0; fi
+    rc=$?
+    if [ "$i" -lt "$tries" ]; then
+      log "WARN: command failed (exit $rc), retrying in ${delay}s: $*"
+      sleep "$delay"
+      delay=$((delay * 2))
+    fi
+  done
+  return "$rc"
+}
 
 if [ "$EUID" -eq 0 ]; then
   echo "Don't run install.sh as root. Run as your normal user." >&2
@@ -57,9 +73,9 @@ log "apt update + base packages"
 # Dpkg options applied to EVERY apt-get install/upgrade so maintainer-conflict
 # prompts ("keep current config? use new?") never surface and hang reruns.
 APT_OPTS=(-o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-confdef")
-sudo DEBIAN_FRONTEND=noninteractive apt-get update -y
-sudo DEBIAN_FRONTEND=noninteractive apt-get upgrade -y "${APT_OPTS[@]}"
-sudo DEBIAN_FRONTEND=noninteractive apt-get install -y "${APT_OPTS[@]}" \
+retry 3 sudo DEBIAN_FRONTEND=noninteractive apt-get update -y
+retry 3 sudo DEBIAN_FRONTEND=noninteractive apt-get upgrade -y "${APT_OPTS[@]}"
+retry 3 sudo DEBIAN_FRONTEND=noninteractive apt-get install -y "${APT_OPTS[@]}" \
   curl wget ca-certificates gnupg lsb-release \
   git build-essential pkg-config \
   zsh unzip zip tar \
@@ -87,8 +103,16 @@ export PATH="$HOME/.local/bin:$PATH"
 log "Installing Google Chrome (real .deb; snap chromium doesn't work in WSL)"
 if ! have google-chrome; then
   TMPDEB="$(mktemp --suffix=.deb)"
-  wget -qO "$TMPDEB" https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
-  sudo DEBIAN_FRONTEND=noninteractive apt-get install -y "${APT_OPTS[@]}" "$TMPDEB"
+  if ! retry 3 wget -qO "$TMPDEB" https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb; then
+    rm -f "$TMPDEB"
+    echo "FATAL: Google Chrome download failed. Re-run install.sh to retry." >&2
+    exit 100
+  fi
+  if ! retry 3 sudo DEBIAN_FRONTEND=noninteractive apt-get install -y "${APT_OPTS[@]}" "$TMPDEB"; then
+    rm -f "$TMPDEB"
+    echo "FATAL: Google Chrome install failed. Re-run install.sh to retry." >&2
+    exit 100
+  fi
   rm -f "$TMPDEB"
 fi
 # Convenience symlink: `chromium` resolves to Chrome. Note: this is Chrome with
@@ -101,8 +125,22 @@ fi
 # ---------- 4. Node.js (NodeSource LTS) ----------
 log "Installing Node.js LTS"
 if ! have node || ! node --version 2>/dev/null | grep -qE '^v(20|22|24)\.'; then
-  curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo -E bash -
-  sudo DEBIAN_FRONTEND=noninteractive apt-get install -y "${APT_OPTS[@]}" nodejs
+  NODESOURCE_SETUP="$(mktemp)"
+  if ! retry 3 curl -fsSL -o "$NODESOURCE_SETUP" https://deb.nodesource.com/setup_lts.x; then
+    rm -f "$NODESOURCE_SETUP"
+    echo "FATAL: NodeSource setup download failed. Re-run install.sh to retry." >&2
+    exit 100
+  fi
+  if ! sudo -E bash "$NODESOURCE_SETUP"; then
+    rm -f "$NODESOURCE_SETUP"
+    echo "FATAL: NodeSource setup failed. Re-run install.sh to retry." >&2
+    exit 100
+  fi
+  rm -f "$NODESOURCE_SETUP"
+  if ! retry 3 sudo DEBIAN_FRONTEND=noninteractive apt-get install -y "${APT_OPTS[@]}" nodejs; then
+    echo "FATAL: Node.js install failed. Re-run install.sh to retry." >&2
+    exit 100
+  fi
 fi
 # Sanity-check npm exists before we touch its config (NodeSource ships npm with nodejs)
 if ! have npm; then
@@ -119,7 +157,18 @@ export PATH="$HOME/.npm-global/bin:$PATH"
 # ---------- 5. Bun ----------
 log "Installing Bun"
 if ! have bun; then
-  curl -fsSL https://bun.sh/install | bash
+  BUN_INSTALLER="$(mktemp)"
+  if ! retry 3 curl -fsSL -o "$BUN_INSTALLER" https://bun.sh/install; then
+    rm -f "$BUN_INSTALLER"
+    echo "FATAL: Bun installer download failed. Re-run install.sh to retry." >&2
+    exit 100
+  fi
+  if ! bash "$BUN_INSTALLER"; then
+    rm -f "$BUN_INSTALLER"
+    echo "FATAL: Bun install failed. Re-run install.sh to retry." >&2
+    exit 100
+  fi
+  rm -f "$BUN_INSTALLER"
 fi
 export PATH="$HOME/.bun/bin:$PATH"
 
@@ -131,7 +180,9 @@ if ! grep -qxF "$ZSH_BIN" /etc/shells; then
 fi
 log "Setting zsh as default shell for $USER_NAME"
 if [ "$(getent passwd "$USER_NAME" | cut -d: -f7)" != "$ZSH_BIN" ]; then
-  sudo chsh -s "$ZSH_BIN" "$USER_NAME"
+  if ! sudo chsh -s "$ZSH_BIN" "$USER_NAME"; then
+    log "WARN: chsh failed; shortcut still launches zsh explicitly"
+  fi
 fi
 
 # Pre-backup existing .zshrc BEFORE oh-my-zsh installer (which may overwrite it).
@@ -148,8 +199,19 @@ fi
 if [ ! -f "$HOME/.oh-my-zsh/oh-my-zsh.sh" ]; then
   [ -d "$HOME/.oh-my-zsh" ] && rm -rf "$HOME/.oh-my-zsh"
   log "Installing oh-my-zsh"
+  OMZ_INSTALLER="$(mktemp)"
+  if ! retry 3 curl -fsSL -o "$OMZ_INSTALLER" https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh; then
+    rm -f "$OMZ_INSTALLER"
+    echo "FATAL: oh-my-zsh installer download failed. Re-run install.sh to retry." >&2
+    exit 100
+  fi
   RUNZSH=no CHSH=no KEEP_ZSHRC=yes \
-    sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"
+    sh "$OMZ_INSTALLER" || {
+      rm -f "$OMZ_INSTALLER"
+      echo "FATAL: oh-my-zsh install failed. Re-run install.sh to retry." >&2
+      exit 100
+    }
+  rm -f "$OMZ_INSTALLER"
 fi
 
 # zsh plugins
@@ -158,7 +220,7 @@ clone_if_needed() {
   local repo="$1" dest="$2" sentinel="$3"
   if [ ! -f "$dest/$sentinel" ]; then
     [ -d "$dest" ] && rm -rf "$dest"
-    git clone --depth=1 "$repo" "$dest"
+    retry 3 git clone --depth=1 "$repo" "$dest"
   fi
 }
 clone_if_needed https://github.com/zsh-users/zsh-autosuggestions       "$ZSH_CUSTOM/plugins/zsh-autosuggestions"       "zsh-autosuggestions.zsh"
@@ -304,7 +366,7 @@ rm -f "$MANAGED_TMP"
 # ---------- 8. Claude Code ----------
 log "Installing Claude Code (@anthropic-ai/claude-code)"
 if ! have claude; then
-  if ! npm install -g @anthropic-ai/claude-code; then
+  if ! retry 2 npm install -g @anthropic-ai/claude-code; then
     echo "FATAL: claude-code install failed. Try: npm i -g @anthropic-ai/claude-code" >&2
     exit 100
   fi
@@ -317,7 +379,10 @@ fi
 # for IDE + LLM provider. Defaults: ide=claude-code, provider=claude.
 log "Installing claude-mem (will ask for IDE + provider - pick 'claude-code' and 'claude' if unsure)"
 if [ ! -d "$HOME/.claude/plugins/marketplaces/thedotmack" ] && [ ! -f "$HOME/.claude-mem/settings.json" ]; then
-  npx --yes claude-mem@latest install || log "WARN: claude-mem install exited non-zero - run 'npx claude-mem install' manually"
+  if ! npx --yes claude-mem@latest install; then
+    log "WARN: claude-mem install exited non-zero - run 'npx claude-mem install' manually"
+    SKILL_FAILURES+=("claude-mem install failed")
+  fi
 else
   log "claude-mem already installed (settings dir present); skipping"
 fi
@@ -334,8 +399,12 @@ install_skill() {
     return 0
   fi
   if [ -d "$dest/.git" ]; then
-    log "  $name: already cloned (not auto-updated; run 'git -C $dest pull' to refresh)"
-    return 0
+    if git -C "$dest" rev-parse --verify HEAD >/dev/null 2>&1; then
+      log "  $name: already cloned (not auto-updated; run 'git -C $dest pull' to refresh)"
+      return 0
+    fi
+    log "  $name: removing incomplete previous clone"
+    rm -rf "$dest"
   fi
   if [ -d "$dest" ] && [ -n "$(ls -A "$dest" 2>/dev/null)" ]; then
     log "  $name: WARN - $dest exists and is not a git repo. Skipping. Remove it manually to re-clone."
@@ -345,7 +414,7 @@ install_skill() {
   # Empty placeholder dir? rmdir so clone can create it cleanly.
   [ -d "$dest" ] && rmdir "$dest" 2>/dev/null || true
 
-  if git clone --depth=1 "$url" "$dest"; then
+  if retry 3 git clone --depth=1 "$url" "$dest"; then
     log "  $name: cloned"
     if [ "$SKIP_SKILL_SETUP" = "1" ]; then
       log "  $name: skipped upstream setup (--no-skill-setup)"
