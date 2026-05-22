@@ -13,7 +13,7 @@ Le setup repart volontairement sur un **Ubuntu 22.04 propre**. Les autres Ubuntu
 - un raccourci Bureau `Claude Code (auto).lnk`
 - un terminal WSL propre, en `zsh`, ouvert dans `~`
 - Claude Code prêt à connecter manuellement, sans ouverture automatique du navigateur WSL
-- Claude Code, Codex et les skills prêts à l’emploi
+- Claude Code, Codex, `gstack`, Superpowers et `claude-mem` prêts à l’emploi
 
 ## 1. Ouvrir PowerShell en administrateur
 
@@ -92,23 +92,43 @@ Dans Claude, vérifiez les skills avec :
 /skills
 ```
 
-Pour les skills Matt Pocock, lancez ensuite cette commande **dans le repo du projet à configurer** :
+### Finaliser les skills Karpathy et Matt Pocock
+
+Le script installe `gstack`, Superpowers et tente de préparer les autres skills. Pour Karpathy et Matt Pocock, le plus fiable est de finir avec les commandes officielles après le premier login Claude.
+
+Dans Claude Code, collez :
+
+```text
+/plugin marketplace add forrestchang/andrej-karpathy-skills
+/plugin install andrej-karpathy-skills@karpathy-skills
+```
+
+Dans le terminal WSL, collez :
+
+```bash
+npx skills@latest add mattpocock/skills
+```
+
+Choisissez les skills voulus et vérifiez que `/setup-matt-pocock-skills` est sélectionné. Ensuite lancez cette commande **dans le repo du projet à configurer** :
 
 ```text
 /setup-matt-pocock-skills
 ```
 
-Cette étape vient du quickstart officiel de `mattpocock/skills`. Elle n’est pas lancée automatiquement parce qu’elle configure le repo courant (`AGENTS.md` ou `CLAUDE.md`, tracker, labels, docs). Il faut donc la lancer une fois par projet.
+Cette dernière étape configure le repo courant (`AGENTS.md` ou `CLAUDE.md`, tracker, labels, docs). Il faut donc la lancer une fois par projet.
 
 ## 7. Ce qu’il faut savoir sur les skills
 
-Le setup installe bien :
+Le setup installe automatiquement :
 
 - `claude-mem`
-- Karpathy skills
 - `gstack`
-- Matt Pocock skills
 - Superpowers
+
+À finaliser après login :
+
+- Karpathy skills : commandes `/plugin marketplace add ...` puis `/plugin install ...`
+- Matt Pocock skills : `npx skills@latest add mattpocock/skills`, puis `/setup-matt-pocock-skills` par repo
 
 Connectez-vous à **Claude Code** et à **Codex**. Les deux doivent être authentifiés pour travailler ensemble correctement.
 
@@ -121,7 +141,7 @@ Challenge ton plan avec Codex avant de modifier le code.
 Autres repères :
 
 - `claude-mem` garde du contexte/mémoire entre les sessions.
-- Karpathy apporte des skills de raisonnement et de travail avec les LLM.
+- Karpathy apporte des règles de raisonnement et de travail plus strictes pour Claude Code.
 - `gstack` ajoute des workflows orientés agent et setup de skills.
 - Matt Pocock ajoute des skills de dev TypeScript/PRD/issues/diagnostic. Lancez `/setup-matt-pocock-skills` dans chaque repo où vous voulez les utiliser.
 - Superpowers ajoute des commandes et habitudes de travail Claude Code.
@@ -134,14 +154,14 @@ Dans le terminal WSL, collez :
 echo "--- versions ---"; node --version; bun --version; google-chrome --version | head -1; claude --version; codex --version; echo "--- skills visibles ---"; find ~/.claude/skills -mindepth 2 -maxdepth 2 -name SKILL.md -printf '%h\n' | xargs -r -n1 basename | sort; echo "--- shell ---"; echo "$SHELL"
 ```
 
-Vous devez voir des versions pour Node, Bun, Chrome, Claude et Codex, puis des skills comme :
+Vous devez voir des versions pour Node, Bun, Chrome, Claude et Codex, puis au minimum :
 
 ```text
 gstack
-karpathy-guidelines
-setup-matt-pocock-skills
 using-superpowers
 ```
+
+Après les commandes de finalisation, vous devriez aussi voir `karpathy-guidelines` et `setup-matt-pocock-skills`.
 
 ## Alias utiles
 
@@ -185,7 +205,7 @@ path    # affiche PATH ligne par ligne
 - zsh, oh-my-zsh, Pure prompt, tmux, fzf, ripgrep, fd, bat, eza
 - Node LTS, Bun, Google Chrome
 - Claude Code, OpenAI Codex CLI, claude-mem
-- skills Claude : gstack, Karpathy, Superpowers, Matt Pocock
+- skills Claude : gstack et Superpowers automatiques; Karpathy et Matt Pocock à finaliser après login
 - FiraCode Nerd Font Mono
 - profil Windows Terminal et raccourcis Bureau
 

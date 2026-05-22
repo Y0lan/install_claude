@@ -538,6 +538,13 @@ else
   mv "$ZSHRC.new" "$ZSHRC"
 fi
 rm -f "$MANAGED_TMP"
+
+# Clean up a legacy first-run hook from older bootstrap versions, even if it
+# somehow survived outside the managed block.
+if grep -q '^# ===== first-run hook: launch claude OAuth =====$' "$ZSHRC"; then
+  perl -0pi -e 's/\n# ===== first-run hook: launch claude OAuth =====\n.*?\n  fi\nfi\n/\n/s' "$ZSHRC"
+fi
+rm -f "$HOME/.claude-firstrun"
 log "~/.zshrc managed block ready"
 
 # ---------- 8. Claude Code ----------
