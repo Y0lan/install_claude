@@ -211,10 +211,18 @@ WSLCONF
 wsl -d $Distro -u root -- bash -c $bashUser
 if ($LASTEXITCODE -ne 0) { Die "User provisioning inside $Distro failed (wsl exit $LASTEXITCODE). See output above." }
 
-# Try the per-distro launcher's --default-user too (belt + suspenders)
+# Belt-and-suspenders: also try the legacy per-distro launcher exe (ubuntu2204.exe,
+# ubuntu.exe). These exist only on Microsoft-Store-distribution installs from the
+# old AppX days. On modern Store-package WSL the exes are absent and /etc/wsl.conf
+# (written above) is the canonical source of truth; the loop silently no-ops then,
+# which is correct.
+$launcherSet = $false
 foreach ($l in @("ubuntu2204.exe","ubuntu.exe")) {
   $cmd = Get-Command $l -ErrorAction SilentlyContinue
-  if ($cmd) { & $cmd.Source config --default-user $Username 2>$null | Out-Null; break }
+  if ($cmd) { & $cmd.Source config --default-user $Username 2>$null | Out-Null; $launcherSet = $true; break }
+}
+if (-not $launcherSet) {
+  Log "(no legacy launcher.exe found - relying on /etc/wsl.conf for default user)"
 }
 
 # ---------- 6. Default WSL distro ----------
@@ -274,9 +282,21 @@ Write-Host "    Installed $installedCount new font file(s)"
 if ($installedCount -gt 0) { Start-Sleep -Seconds 3 }
 
 # ---------- 10. Windows Terminal: font + start-in-home (safe parse, backup-restore on failure) ----------
-$wtSettings = "$env:LOCALAPPDATA\Packages\Microsoft.WindowsTerminal_8wekyb3d8bbwe\LocalState\settings.json"
+# Probe all three known WT package names. Same class of "trust the truth, not
+# the flag" fix as the WSL feature detection above. Stable wins if multiple
+# are installed (most users' default).
+$wtCandidates = @(
+  "$env:LOCALAPPDATA\Packages\Microsoft.WindowsTerminal_8wekyb3d8bbwe\LocalState\settings.json",
+  "$env:LOCALAPPDATA\Packages\Microsoft.WindowsTerminalPreview_8wekyb3d8bbwe\LocalState\settings.json",
+  "$env:LOCALAPPDATA\Packages\Microsoft.WindowsTerminalCanary_8wekyb3d8bbwe\LocalState\settings.json"
+)
+$wtSettings = $wtCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
 $wtPatched = $false
-if (Test-Path $wtSettings) {
+if ($wtSettings) {
+  $wtFlavor = if ($wtSettings -match 'WindowsTerminalPreview') { 'Preview' }
+              elseif ($wtSettings -match 'WindowsTerminalCanary') { 'Canary' }
+              else { 'Stable' }
+  Log "Detected Windows Terminal: $wtFlavor"
   Log "Patching Windows Terminal settings.json"
   $bak = "$wtSettings.bak.$(Get-Date -f yyyyMMddHHmmss)"
   Copy-Item $wtSettings $bak
