@@ -1,6 +1,6 @@
 # install_claude
 
-One-shot bootstrap for a clean **WSL2 Ubuntu 22.04** dev box with Claude Code, gstack, Bun, Node, Google Chrome, zsh + Pure prompt, FiraCode Nerd Font, and the karpathy / superpowers / matt-pocock / claude-mem skill packs.
+One-shot bootstrap for a clean **WSL2 Ubuntu 22.04** dev box with Claude Code, OpenAI Codex CLI, gstack, Bun, Node, Google Chrome, zsh + Pure prompt, FiraCode Nerd Font, and the karpathy / superpowers / matt-pocock / claude-mem skill packs.
 
 End state: open a Desktop shortcut -> lands in `~` in `zsh` -> Claude Code opens for OAuth automatically.
 
@@ -53,7 +53,7 @@ If WSL features had to be enabled for the first time, the script will tell you t
 - Installs Ubuntu-22.04 as the default WSL distro
 - Provisions your Linux user with **passwordless sudo** and `systemd` enabled
 - Installs Node LTS, Bun, Google Chrome (real `.deb`, not snap), zsh + oh-my-zsh + Pure prompt, ripgrep, fd, fzf, bat, etc.
-- Installs Claude Code (`claude`), `claude-mem`, and clones into `~/.claude/skills/`:
+- Installs Claude Code (`claude`), OpenAI Codex CLI (`codex`), `claude-mem`, and clones into `~/.claude/skills/`:
   - [`garrytan/gstack`](https://github.com/garrytan/gstack)
   - [`forrestchang/andrej-karpathy-skills`](https://github.com/forrestchang/andrej-karpathy-skills)
   - [`obra/superpowers`](https://github.com/obra/superpowers)
@@ -88,7 +88,7 @@ bash ~/install.sh --no-skill-setup   # clone skills but do NOT execute their set
 After OAuth completes, double-click the desktop shortcut and paste this one-liner inside zsh:
 
 ```bash
-echo "--- versions ---"; node --version; bun --version; google-chrome --version | head -1; claude --version; [ -f ~/.claude-mem/settings.json ] && echo "claude-mem: installed (settings.json present)" || echo "claude-mem: missing"; echo "--- skills ---"; ls -1 ~/.claude/skills/; echo "--- shell ---"; echo "shell: $SHELL"; grep -c '^prompt pure' ~/.zshrc && echo "pure prompt: configured"
+echo "--- versions ---"; node --version; bun --version; google-chrome --version | head -1; claude --version; codex --version; [ -f ~/.claude-mem/settings.json ] && echo "claude-mem: installed (settings.json present)" || echo "claude-mem: missing"; echo "--- skills ---"; ls -1 ~/.claude/skills/; echo "--- shell ---"; echo "shell: $SHELL"; grep -c '^prompt pure' ~/.zshrc && echo "pure prompt: configured"
 ```
 
 Expected output (versions will differ; the structure is what matters):
@@ -99,6 +99,7 @@ v22.x.x
 1.x.x
 Google Chrome 1xx.x.x.x
 1.x.x (Claude Code)
+0.x.x (Codex CLI)
 claude-mem: installed (settings.json present)
 --- skills ---
 andrej-karpathy-skills

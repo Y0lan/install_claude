@@ -376,7 +376,16 @@ if ! have claude; then
   fi
 fi
 
-# ---------- 9. claude-mem (proper plugin install, not just the npm package) ----------
+# ---------- 9. OpenAI Codex CLI ----------
+log "Installing OpenAI Codex CLI (@openai/codex)"
+if ! have codex; then
+  if ! retry 2 npm install -g @openai/codex; then
+    echo "FATAL: codex install failed. Try: npm i -g @openai/codex" >&2
+    exit 100
+  fi
+fi
+
+# ---------- 10. claude-mem (proper plugin install, not just the npm package) ----------
 # Upstream docs explicitly say: DO NOT 'npm install -g claude-mem' - that only
 # drops the SDK without registering the Claude Code hooks or starting the worker.
 # `npx claude-mem install` is the canonical installer; it's interactive and asks
@@ -391,7 +400,7 @@ else
   log "claude-mem already installed (settings dir present); skipping"
 fi
 
-# ---------- 10. Claude skills (~/.claude/skills/) ----------
+# ---------- 11. Claude skills (~/.claude/skills/) ----------
 log "Setting up ~/.claude/skills/"
 mkdir -p "$HOME/.claude/skills"
 
@@ -460,7 +469,7 @@ install_skill "matt-pocock-skills"      "$MATT_POCOCK_REPO"
 # Alternative install path for superpowers (via Claude Code marketplace, after OAuth):
 #   /plugin install superpowers@claude-plugins-official
 
-# ---------- 11. First-run marker (so .zshrc auto-launches claude on first interactive zsh) ----------
+# ---------- 12. First-run marker (so .zshrc auto-launches claude on first interactive zsh) ----------
 # Only create if claude is actually installed AND user isn't already logged in.
 # Detection is heuristic - we check known credential paths. Proper file-vs-dir
 # predicates: `-s` is only valid on files (returns true on non-empty dirs on
@@ -478,7 +487,7 @@ if [ "$already_authed" = "0" ]; then
   touch "$HOME/.claude-firstrun"
 fi
 
-# ---------- 12. Done - summary ----------
+# ---------- 13. Done - summary ----------
 log "===== install.sh complete ====="
 echo ""
 echo "  Shell:      zsh + Pure prompt"
@@ -486,6 +495,7 @@ echo "  Node:       $(node --version 2>/dev/null || echo 'missing')"
 echo "  Bun:        $(bun --version 2>/dev/null || echo 'missing')"
 echo "  Chrome:     $(google-chrome --version 2>/dev/null || echo 'missing')"
 echo "  Claude:     $(claude --version 2>/dev/null || echo 'missing')"
+echo "  Codex:      $(codex --version 2>/dev/null || echo 'missing')"
 echo "  claude-mem: $(npx --yes claude-mem@latest version 2>/dev/null | tail -1 || echo 'missing')"
 echo ""
 
